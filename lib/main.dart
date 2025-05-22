@@ -1,5 +1,6 @@
 // import 'package:face_detector/screens/presensi_screen.dart';
-import 'package:face_detector/screens/login_screen.dart';
+// import 'package:face_detector/screens/login_screen.dart';
+import 'package:face_detector/screens/signup_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'firebase_options.dart';
@@ -33,7 +34,7 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const LoginPage(),
+      home: const SignupPage(),
     );
   }
 }
