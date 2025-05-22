@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:face_detector/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'dart:math';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -17,11 +17,23 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
-
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
-  String _selectedRole = 'wali_kelas';
+
+  String? _selectedRole;
+  final List<String> _roleOptions = ['admin', 'walikelas'];
+
+  Future<String> _generateUserId() async {
+    const String prefix = 'idmi04';
+    final QuerySnapshot snapshot =
+        await FirebaseFirestore.instance.collection('pengguna').get();
+
+    final int userCount = snapshot.docs.length + 1;
+    final String formattedNumber = userCount.toString().padLeft(4, '0');
+
+    return prefix + formattedNumber;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +65,7 @@ class _SignupPageState extends State<SignupPage> {
                       ),
                       const SizedBox(height: 5),
                       const Text(
-                        'Daftar Akun Baru',
+                        'Absen Digital. Sekolah Makin Pintar!',
                         style: TextStyle(
                           fontSize: 16,
                           color: Color(0xFFFFC107),
@@ -80,17 +92,15 @@ class _SignupPageState extends State<SignupPage> {
                               children: [
                                 const Center(
                                   child: Text(
-                                    'Buat Akun Baru',
+                                    'Daftar Akun',
                                     style: TextStyle(
-                                      fontSize: 28,
+                                      fontSize: 30,
                                       fontWeight: FontWeight.w800,
                                       color: Colors.white,
                                     ),
                                   ),
                                 ),
                                 const SizedBox(height: 25),
-
-                                // Nama Lengkap
                                 TextFormField(
                                   controller: _namaController,
                                   decoration: InputDecoration(
@@ -108,15 +118,13 @@ class _SignupPageState extends State<SignupPage> {
                                     if (value == null || value.trim().isEmpty) {
                                       return 'Nama lengkap tidak boleh kosong';
                                     }
-                                    if (value.trim().length > 50) {
-                                      return 'Nama maksimal 50 karakter';
+                                    if (value.trim().length < 2) {
+                                      return 'Nama minimal 2 karakter';
                                     }
                                     return null;
                                   },
                                 ),
                                 const SizedBox(height: 15),
-
-                                // Email
                                 TextFormField(
                                   controller: _emailController,
                                   keyboardType: TextInputType.emailAddress,
@@ -135,9 +143,6 @@ class _SignupPageState extends State<SignupPage> {
                                     if (value == null || value.trim().isEmpty) {
                                       return 'Email tidak boleh kosong';
                                     }
-                                    if (value.trim().length > 100) {
-                                      return 'Email maksimal 100 karakter';
-                                    }
                                     if (!RegExp(
                                             r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
                                         .hasMatch(value.trim())) {
@@ -147,10 +152,20 @@ class _SignupPageState extends State<SignupPage> {
                                   },
                                 ),
                                 const SizedBox(height: 15),
-
-                                // Role Selection
                                 DropdownButtonFormField<String>(
                                   value: _selectedRole,
+                                  items: _roleOptions.map((role) {
+                                    return DropdownMenuItem<String>(
+                                      value: role,
+                                      child: Text(role[0].toUpperCase() +
+                                          role.substring(1)),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedRole = value;
+                                    });
+                                  },
                                   decoration: InputDecoration(
                                     hintText: 'Pilih Role',
                                     filled: true,
@@ -162,25 +177,14 @@ class _SignupPageState extends State<SignupPage> {
                                       borderSide: BorderSide.none,
                                     ),
                                   ),
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 'admin',
-                                      child: Text('Admin'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'wali_kelas',
-                                      child: Text('Wali Kelas'),
-                                    ),
-                                  ],
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _selectedRole = value!;
-                                    });
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Role harus dipilih';
+                                    }
+                                    return null;
                                   },
                                 ),
                                 const SizedBox(height: 15),
-
-                                // Password
                                 TextFormField(
                                   controller: _passwordController,
                                   obscureText: _obscurePassword,
@@ -212,15 +216,13 @@ class _SignupPageState extends State<SignupPage> {
                                     if (value == null || value.trim().isEmpty) {
                                       return 'Kata sandi tidak boleh kosong';
                                     }
-                                    if (value.length != 6) {
-                                      return 'Kata sandi harus 6 karakter';
+                                    if (value.length < 6) {
+                                      return 'Kata sandi minimal 6 karakter';
                                     }
                                     return null;
                                   },
                                 ),
                                 const SizedBox(height: 15),
-
-                                // Confirm Password
                                 TextFormField(
                                   controller: _confirmPasswordController,
                                   obscureText: _obscureConfirmPassword,
@@ -254,14 +256,12 @@ class _SignupPageState extends State<SignupPage> {
                                       return 'Konfirmasi kata sandi tidak boleh kosong';
                                     }
                                     if (value != _passwordController.text) {
-                                      return 'Kata sandi tidak cocok';
+                                      return 'Konfirmasi kata sandi tidak sama';
                                     }
                                     return null;
                                   },
                                 ),
                                 const SizedBox(height: 25),
-
-                                // Tombol Daftar
                                 SizedBox(
                                   width: double.infinity,
                                   height: 50,
@@ -292,8 +292,6 @@ class _SignupPageState extends State<SignupPage> {
                                   ),
                                 ),
                                 const SizedBox(height: 15),
-
-                                // Link ke Login
                                 Center(
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
@@ -307,7 +305,12 @@ class _SignupPageState extends State<SignupPage> {
                                       ),
                                       TextButton(
                                         onPressed: () {
-                                          Navigator.of(context).pop();
+                                          Navigator.of(context).pushReplacement(
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  const LoginPage(),
+                                            ),
+                                          );
                                         },
                                         child: const Text(
                                           'Masuk',
@@ -340,15 +343,13 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  // Generate random 15-digit ID
-  int _generateUserId() {
-    final random = Random();
-    // Generate 15 digit number (100000000000000 to 999999999999999)
-    return 100000000000000 + random.nextInt(900000000000000);
-  }
-
   Future<void> _handleSignup() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_selectedRole == null) {
+      _showErrorToast('Silakan pilih role terlebih dahulu');
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -358,70 +359,41 @@ class _SignupPageState extends State<SignupPage> {
       final String nama = _namaController.text.trim();
       final String email = _emailController.text.trim();
       final String password = _passwordController.text.trim();
+      final String role = _selectedRole!;
 
-      // Check if email already exists
-      final QuerySnapshot emailCheck = await FirebaseFirestore.instance
+      final QuerySnapshot existingUser = await FirebaseFirestore.instance
           .collection('pengguna')
           .where('email', isEqualTo: email)
           .limit(1)
           .get();
 
-      if (emailCheck.docs.isNotEmpty) {
+      if (existingUser.docs.isNotEmpty) {
         _showErrorToast('Email sudah terdaftar');
         return;
       }
 
-      // Generate unique user ID
-      int userId;
-      bool isIdUnique = false;
+      final String userId = await _generateUserId();
 
-      // Keep generating until we get a unique ID
-      do {
-        userId = _generateUserId();
-        final QuerySnapshot idCheck = await FirebaseFirestore.instance
-            .collection('pengguna')
-            .where('id_pengguna', isEqualTo: userId)
-            .limit(1)
-            .get();
-
-        if (idCheck.docs.isEmpty) {
-          isIdUnique = true;
-        }
-      } while (!isIdUnique);
-
-      // Create user data
-      final userData = {
+      await FirebaseFirestore.instance.collection('pengguna').doc(userId).set({
         'id_pengguna': userId,
         'nama': nama,
         'email': email,
         'password': password,
-        'role': _selectedRole,
-        'created_at': Timestamp.now(),
-      };
-
-      // Save to Firestore
-      await FirebaseFirestore.instance
-          .collection('pengguna')
-          .doc(userId.toString())
-          .set(userData);
+        'role': role,
+        'tanggal_daftar': Timestamp.now(),
+      });
 
       _showSuccessToast('Pendaftaran berhasil!');
 
-      // Clear form
-      _namaController.clear();
-      _emailController.clear();
-      _passwordController.clear();
-      _confirmPasswordController.clear();
-      setState(() {
-        _selectedRole = 'wali_kelas';
-      });
+      await Future.delayed(const Duration(seconds: 1));
 
-      // Navigate back to login after 2 seconds
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
-      });
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => const LoginPage(),
+          ),
+        );
+      }
     } catch (e) {
       _showErrorToast('Terjadi kesalahan: ${e.toString()}');
     } finally {
