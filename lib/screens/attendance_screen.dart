@@ -2,6 +2,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:smart_presensee/screens/student_screen.dart'; // Import student screen
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -146,33 +147,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
-  void _showAddDialog() {
-    _nameController.clear();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Tambah Data Kehadiran'),
-          content: TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Nama Siswa',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: _addAttendanceData,
-              child: const Text('Tambah'),
-            ),
-          ],
-        );
-      },
-    );
+  // Updated method to navigate to StudentScreen instead of showing dialog
+  void _navigateToAddStudent() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const StudentScreen(),
+      ),
+    ).then((_) {
+      // Refresh data when returning from StudentScreen
+      _loadAttendanceData();
+    });
   }
 
   void _showEditDialog(AttendanceModel attendance) {
@@ -275,7 +260,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _showAddDialog,
+                    onPressed:
+                        _navigateToAddStudent, // Updated to navigate to StudentScreen
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFFC107), // Yellow
                       foregroundColor: Colors.black,
