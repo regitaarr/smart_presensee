@@ -2,7 +2,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:smart_presensee/screens/student_screen.dart'; // Import student screen
+import 'package:smart_presensee/screens/student_screen.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -12,215 +12,166 @@ class AttendanceScreen extends StatefulWidget {
 }
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _editNameController = TextEditingController();
-  List<AttendanceModel> attendanceList = [];
+  List<StudentAttendanceModel> studentList = [];
   bool isLoading = true;
+  DateTime selectedDate = DateTime.now();
+
+  // Status options
+  final List<String> statusOptions = ['hadir', 'sakit', 'izin', 'alpha'];
+  final Map<String, Color> statusColors = {
+    'hadir': Colors.green,
+    'sakit': Colors.orange,
+    'izin': Colors.blue,
+    'alpha': Colors.red,
+  };
 
   @override
   void initState() {
     super.initState();
-    _loadAttendanceData();
+    _loadStudentData();
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _editNameController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadAttendanceData() async {
+  Future<void> _loadStudentData() async {
     try {
       setState(() {
         isLoading = true;
       });
 
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('kehadiran')
-          .orderBy('name')
+      // Load all students
+      QuerySnapshot studentSnapshot = await FirebaseFirestore.instance
+          .collection('siswa')
+          .orderBy('nama_siswa')
           .get();
 
-      attendanceList = snapshot.docs
-          .map((doc) => AttendanceModel.fromFirestore(doc))
-          .toList();
+      List<StudentAttendanceModel> tempList = [];
+
+      for (var doc in studentSnapshot.docs) {
+        Map<String, dynamic> studentData = doc.data() as Map<String, dynamic>;
+
+        // Check if face is registered
+        QuerySnapshot faceSnapshot = await FirebaseFirestore.instance
+            .collection('wajah_siswa')
+            .where('nisn', isEqualTo: doc.id)
+            .limit(1)
+            .get();
+
+        bool hasFaceRegistered = faceSnapshot.docs.isNotEmpty;
+
+        // Check today's attendance
+        DateTime startOfDay =
+            DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+        DateTime endOfDay = DateTime(selectedDate.year, selectedDate.month,
+            selectedDate.day, 23, 59, 59);
+
+        QuerySnapshot attendanceSnapshot = await FirebaseFirestore.instance
+            .collection('presensi')
+            .where('nisn', isEqualTo: doc.id)
+            .where('tanggal_waktu',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+            .where('tanggal_waktu',
+                isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+            .limit(1)
+            .get();
+
+        String? todayStatus;
+        if (attendanceSnapshot.docs.isNotEmpty) {
+          Map<String, dynamic>? attendanceData =
+              attendanceSnapshot.docs.first.data() as Map<String, dynamic>?;
+          todayStatus =
+              attendanceData != null ? attendanceData['status'] : null;
+        }
+
+        tempList.add(StudentAttendanceModel(
+          nisn: doc.id,
+          nama: studentData['nama_siswa'] ?? '',
+          kelas: studentData['kelas'] ?? '',
+          jenisKelamin: studentData['jenis_kelamin'] ?? '',
+          hasFaceRegistered: hasFaceRegistered,
+          todayAttendanceStatus: todayStatus,
+        ));
+      }
 
       setState(() {
+        studentList = tempList;
         isLoading = false;
       });
     } catch (e) {
-      log('Error loading attendance data: $e');
+      log('Error loading student data: $e');
       setState(() {
         isLoading = false;
       });
-      _showToast('Gagal memuat data kehadiran');
+      _showToast('Gagal memuat data siswa');
     }
   }
 
-  Future<void> _addAttendanceData() async {
-    if (_nameController.text.trim().isEmpty) {
-      _showToast('Nama tidak boleh kosong');
-      return;
-    }
+  // Generate attendance ID
+  Future<String> _generateAttendanceId() async {
+    const String prefix = 'idpr04';
+    final QuerySnapshot snapshot =
+        await FirebaseFirestore.instance.collection('presensi').get();
 
+    final int attendanceCount = snapshot.docs.length + 1;
+    final String formattedNumber = attendanceCount.toString().padLeft(4, '0');
+
+    return prefix + formattedNumber;
+  }
+
+  Future<void> _markAttendance(String nisn, String status) async {
     try {
-      String docId =
-          FirebaseFirestore.instance.collection('kehadiran').doc().id;
+      // Check if attendance already exists for today
+      DateTime startOfDay =
+          DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      DateTime endOfDay = DateTime(
+          selectedDate.year, selectedDate.month, selectedDate.day, 23, 59, 59);
 
-      AttendanceModel newAttendance = AttendanceModel(
-        id: docId,
-        name: _nameController.text.trim(),
-        status: 'Hadir',
-        timestamp: Timestamp.now(),
-      );
+      QuerySnapshot existingAttendance = await FirebaseFirestore.instance
+          .collection('presensi')
+          .where('nisn', isEqualTo: nisn)
+          .where('tanggal_waktu',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('tanggal_waktu',
+              isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+          .limit(1)
+          .get();
 
-      await FirebaseFirestore.instance
-          .collection('kehadiran')
-          .doc(docId)
-          .set(newAttendance.toFirestore());
+      if (existingAttendance.docs.isNotEmpty) {
+        // Update existing attendance
+        await FirebaseFirestore.instance
+            .collection('presensi')
+            .doc(existingAttendance.docs.first.id)
+            .update({
+          'status': status,
+          'tanggal_waktu': Timestamp.now(),
+        });
+      } else {
+        // Create new attendance record
+        String attendanceId = await _generateAttendanceId();
+        await FirebaseFirestore.instance
+            .collection('presensi')
+            .doc(attendanceId)
+            .set({
+          'id_presensi': attendanceId,
+          'nisn': nisn,
+          'tanggal_waktu': Timestamp.now(),
+          'status': status,
+        });
+      }
 
-      _nameController.clear();
-      Navigator.of(context).pop();
-      _loadAttendanceData();
-      _showToast('Data berhasil ditambahkan');
+      _showToast('Status presensi berhasil diperbarui');
+      _loadStudentData(); // Reload data
     } catch (e) {
-      log('Error adding attendance: $e');
-      _showToast('Gagal menambahkan data');
+      log('Error marking attendance: $e');
+      _showToast('Gagal memperbarui status presensi');
     }
   }
 
-  Future<void> _editAttendanceData(AttendanceModel attendance) async {
-    if (_editNameController.text.trim().isEmpty) {
-      _showToast('Nama tidak boleh kosong');
-      return;
-    }
-
-    try {
-      await FirebaseFirestore.instance
-          .collection('kehadiran')
-          .doc(attendance.id)
-          .update({
-        'name': _editNameController.text.trim(),
-        'status': attendance.status,
-        'timestamp': Timestamp.now(),
-      });
-
-      _editNameController.clear();
-      Navigator.of(context).pop();
-      _loadAttendanceData();
-      _showToast('Data berhasil diubah');
-    } catch (e) {
-      log('Error editing attendance: $e');
-      _showToast('Gagal mengubah data');
-    }
-  }
-
-  Future<void> _deleteAttendanceData(String id) async {
-    try {
-      await FirebaseFirestore.instance.collection('kehadiran').doc(id).delete();
-
-      _loadAttendanceData();
-      _showToast('Data berhasil dihapus');
-    } catch (e) {
-      log('Error deleting attendance: $e');
-      _showToast('Gagal menghapus data');
-    }
-  }
-
-  Future<void> _toggleAttendanceStatus(AttendanceModel attendance) async {
-    try {
-      String newStatus = attendance.status == 'Hadir' ? 'Sakit' : 'Hadir';
-
-      await FirebaseFirestore.instance
-          .collection('kehadiran')
-          .doc(attendance.id)
-          .update({
-        'status': newStatus,
-        'timestamp': Timestamp.now(),
-      });
-
-      _loadAttendanceData();
-      _showToast('Status kehadiran berhasil diubah');
-    } catch (e) {
-      log('Error updating status: $e');
-      _showToast('Gagal mengubah status');
-    }
-  }
-
-  // Updated method to navigate to StudentScreen instead of showing dialog
-  void _navigateToAddStudent() {
+  void _showAttendanceHistory(StudentAttendanceModel student) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const StudentScreen(),
+        builder: (context) => AttendanceHistoryScreen(student: student),
       ),
-    ).then((_) {
-      // Refresh data when returning from StudentScreen
-      _loadAttendanceData();
-    });
-  }
-
-  void _showEditDialog(AttendanceModel attendance) {
-    _editNameController.text = attendance.name;
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Edit Data Kehadiran'),
-          content: TextField(
-            controller: _editNameController,
-            decoration: const InputDecoration(
-              labelText: 'Nama Siswa',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () => _editAttendanceData(attendance),
-              child: const Text('Simpan'),
-            ),
-          ],
-        );
-      },
     );
-  }
-
-  void _showDeleteDialog(AttendanceModel attendance) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Hapus Data'),
-          content: Text(
-              'Apakah Anda yakin ingin menghapus data ${attendance.name}?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _deleteAttendanceData(attendance.id);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-              ),
-              child: const Text('Hapus', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _downloadData() {
-    // Implementasi download data (bisa berupa CSV, Excel, etc.)
-    _showToast('Fitur unduh data akan segera tersedia');
   }
 
   void _showToast(String message) {
@@ -231,10 +182,39 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
+  String _formatDate(DateTime date) {
+    List<String> days = [
+      'Minggu',
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu'
+    ];
+    List<String> months = [
+      '',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember'
+    ];
+
+    return '${days[date.weekday % 7]}, ${date.day} ${months[date.month]} ${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF4CAF50), // Green background
+      backgroundColor: const Color(0xFF4CAF50),
       appBar: AppBar(
         backgroundColor: const Color(0xFF4CAF50),
         elevation: 0,
@@ -243,178 +223,92 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
         ),
         title: const Text(
-          'Kehadiran',
+          'Daftar Kehadiran Siswa',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
           ),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const StudentScreen(),
+                ),
+              ).then((_) => _loadStudentData());
+            },
+            icon: const Icon(Icons.person_add, color: Colors.white),
+            tooltip: 'Tambah Siswa',
+          ),
+        ],
       ),
       body: Column(
         children: [
-          // Action buttons row
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed:
-                        _navigateToAddStudent, // Updated to navigate to StudentScreen
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFC107), // Yellow
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Tambah Data',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // Edit functionality - could show a list of items to edit
-                      _showToast('Pilih item dari daftar untuk mengedit');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFC107), // Yellow
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Edit Data',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // Delete functionality - could show a list of items to delete
-                      _showToast('Pilih item dari daftar untuk menghapus');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Hapus',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
+          // Date selector
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
                 ),
               ],
             ),
-          ),
-
-          // Student name input section
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Expanded(
-                  flex: 3,
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Muhammad Daniel',
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(8)),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Tanggal Presensi',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatDate(selectedDate),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    // Hadir button functionality
+                IconButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null && picked != selectedDate) {
+                      setState(() {
+                        selectedDate = picked;
+                      });
+                      _loadStudentData();
+                    }
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: const Text('Hadir'),
+                  icon: const Icon(Icons.calendar_today,
+                      color: Color(0xFF4CAF50)),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 16),
-
-          // Password field (if needed)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              children: [
-                const Expanded(
-                  flex: 3,
-                  child: TextField(
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      hintText: '••••••••••••••••••••',
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(8)),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    // Sakit button functionality
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: const Text('Sakit'),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Attendance list
+          // Student list
           Expanded(
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -424,10 +318,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ),
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : attendanceList.isEmpty
+                  : studentList.isEmpty
                       ? const Center(
                           child: Text(
-                            'Belum ada data kehadiran',
+                            'Belum ada data siswa',
                             style: TextStyle(
                               fontSize: 16,
                               color: Colors.grey,
@@ -436,121 +330,164 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.all(16),
-                          itemCount: attendanceList.length,
+                          itemCount: studentList.length,
                           itemBuilder: (context, index) {
-                            final attendance = attendanceList[index];
+                            final student = studentList[index];
                             return Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: attendance.status == 'Hadir'
-                                      ? Colors.green
-                                      : Colors.red,
-                                  child: Text(
-                                    attendance.name[0].toUpperCase(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                title: Text(
-                                  attendance.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  'Status: ${attendance.status}',
-                                  style: TextStyle(
-                                    color: attendance.status == 'Hadir'
-                                        ? Colors.green
-                                        : Colors.red,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                trailing: PopupMenuButton<String>(
-                                  onSelected: (value) {
-                                    switch (value) {
-                                      case 'edit':
-                                        _showEditDialog(attendance);
-                                        break;
-                                      case 'delete':
-                                        _showDeleteDialog(attendance);
-                                        break;
-                                      case 'toggle_status':
-                                        _toggleAttendanceStatus(attendance);
-                                        break;
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Row(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: InkWell(
+                                onTap: () => _showAttendanceHistory(student),
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    children: [
+                                      Row(
                                         children: [
-                                          Icon(Icons.edit, size: 16),
-                                          SizedBox(width: 8),
-                                          Text('Edit'),
+                                          // Student info
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  student.nama,
+                                                  style: const TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'NISN: ${student.nisn} | Kelas: ${student.kelas.toUpperCase()}',
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      student.hasFaceRegistered
+                                                          ? Icons.face
+                                                          : Icons
+                                                              .face_retouching_off,
+                                                      size: 16,
+                                                      color: student
+                                                              .hasFaceRegistered
+                                                          ? Colors.green
+                                                          : Colors.red,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      student.hasFaceRegistered
+                                                          ? 'Wajah Terdaftar'
+                                                          : 'Wajah Belum Terdaftar',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: student
+                                                                .hasFaceRegistered
+                                                            ? Colors.green
+                                                            : Colors.red,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
+                                          // Status indicator
+                                          if (student.todayAttendanceStatus !=
+                                              null)
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 6,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: statusColors[student
+                                                        .todayAttendanceStatus]!
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                                border: Border.all(
+                                                  color: statusColors[student
+                                                      .todayAttendanceStatus]!,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                student.todayAttendanceStatus!
+                                                    .toUpperCase(),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: statusColors[student
+                                                      .todayAttendanceStatus],
+                                                ),
+                                              ),
+                                            ),
                                         ],
                                       ),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: 'toggle_status',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.swap_horiz, size: 16),
-                                          SizedBox(width: 8),
-                                          Text('Ubah Status'),
-                                        ],
+
+                                      const SizedBox(height: 12),
+
+                                      // Attendance status buttons
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceEvenly,
+                                        children: statusOptions.map((status) {
+                                          bool isSelected =
+                                              student.todayAttendanceStatus ==
+                                                  status;
+                                          return Expanded(
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 2),
+                                              child: ElevatedButton(
+                                                onPressed: () =>
+                                                    _markAttendance(
+                                                        student.nisn, status),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: isSelected
+                                                      ? statusColors[status]
+                                                      : Colors.grey[200],
+                                                  foregroundColor: isSelected
+                                                      ? Colors.white
+                                                      : Colors.black87,
+                                                  padding: const EdgeInsets
+                                                      .symmetric(vertical: 8),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  status[0].toUpperCase() +
+                                                      status.substring(1),
+                                                  style: const TextStyle(
+                                                      fontSize: 12),
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
                                       ),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: 'delete',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.delete,
-                                              size: 16, color: Colors.red),
-                                          SizedBox(width: 8),
-                                          Text('Hapus',
-                                              style:
-                                                  TextStyle(color: Colors.red)),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                                onTap: () =>
-                                    _toggleAttendanceStatus(attendance),
                               ),
                             );
                           },
                         ),
-            ),
-          ),
-
-          // Download button
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _downloadData,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFC107), // Yellow
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text(
-                  'Unduh Data',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
             ),
           ),
         ],
@@ -559,34 +496,285 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 }
 
-class AttendanceModel {
-  final String id;
-  final String name;
-  final String status;
-  final Timestamp timestamp;
+// Model for student attendance
+class StudentAttendanceModel {
+  final String nisn;
+  final String nama;
+  final String kelas;
+  final String jenisKelamin;
+  final bool hasFaceRegistered;
+  final String? todayAttendanceStatus;
 
-  AttendanceModel({
-    required this.id,
-    required this.name,
-    required this.status,
-    required this.timestamp,
+  StudentAttendanceModel({
+    required this.nisn,
+    required this.nama,
+    required this.kelas,
+    required this.jenisKelamin,
+    required this.hasFaceRegistered,
+    this.todayAttendanceStatus,
   });
+}
 
-  factory AttendanceModel.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    return AttendanceModel(
-      id: doc.id,
-      name: data['name'] ?? '',
-      status: data['status'] ?? 'Hadir',
-      timestamp: data['timestamp'] ?? Timestamp.now(),
+// Attendance History Screen
+class AttendanceHistoryScreen extends StatefulWidget {
+  final StudentAttendanceModel student;
+
+  const AttendanceHistoryScreen({super.key, required this.student});
+
+  @override
+  State<AttendanceHistoryScreen> createState() =>
+      _AttendanceHistoryScreenState();
+}
+
+class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
+  List<AttendanceRecord> attendanceHistory = [];
+  bool isLoading = true;
+
+  final Map<String, Color> statusColors = {
+    'hadir': Colors.green,
+    'sakit': Colors.orange,
+    'izin': Colors.blue,
+    'alpha': Colors.red,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAttendanceHistory();
+  }
+
+  Future<void> _loadAttendanceHistory() async {
+    try {
+      setState(() {
+        isLoading = true;
+      });
+
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('presensi')
+          .where('nisn', isEqualTo: widget.student.nisn)
+          .orderBy('tanggal_waktu', descending: true)
+          .get();
+
+      List<AttendanceRecord> tempList = [];
+      for (var doc in snapshot.docs) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        tempList.add(AttendanceRecord(
+          id: doc.id,
+          tanggalWaktu: (data['tanggal_waktu'] as Timestamp).toDate(),
+          status: data['status'] ?? 'hadir',
+        ));
+      }
+
+      setState(() {
+        attendanceHistory = tempList;
+        isLoading = false;
+      });
+    } catch (e) {
+      log('Error loading attendance history: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    List<String> days = [
+      'Minggu',
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu'
+    ];
+    List<String> months = [
+      '',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember'
+    ];
+
+    String dayName = days[dateTime.weekday % 7];
+    String monthName = months[dateTime.month];
+    String time =
+        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+
+    return '$dayName, ${dateTime.day} $monthName ${dateTime.year} - $time';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF4CAF50),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF4CAF50),
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+        ),
+        title: const Text(
+          'Riwayat Presensi',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: Column(
+        children: [
+          // Student info header
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.student.nama,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'NISN: ${widget.student.nisn}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  'Kelas: ${widget.student.kelas.toUpperCase()}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Attendance history list
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : attendanceHistory.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'Belum ada riwayat presensi',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: attendanceHistory.length,
+                          itemBuilder: (context, index) {
+                            final record = attendanceHistory[index];
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              child: ListTile(
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: statusColors[record.status]!
+                                        .withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Icon(
+                                    record.status == 'hadir'
+                                        ? Icons.check_circle
+                                        : record.status == 'sakit'
+                                            ? Icons.sick
+                                            : record.status == 'izin'
+                                                ? Icons.assignment
+                                                : Icons.cancel,
+                                    color: statusColors[record.status],
+                                  ),
+                                ),
+                                title: Text(
+                                  _formatDateTime(record.tanggalWaktu),
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                trailing: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: statusColors[record.status]!
+                                        .withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: statusColors[record.status]!,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    record.status.toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: statusColors[record.status],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ),
+        ],
+      ),
     );
   }
+}
 
-  Map<String, dynamic> toFirestore() {
-    return {
-      'name': name,
-      'status': status,
-      'timestamp': timestamp,
-    };
-  }
+// Model for attendance record
+class AttendanceRecord {
+  final String id;
+  final DateTime tanggalWaktu;
+  final String status;
+
+  AttendanceRecord({
+    required this.id,
+    required this.tanggalWaktu,
+    required this.status,
+  });
 }

@@ -47,6 +47,18 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
     }
   }
 
+  // Generate attendance ID with format idpr04XXXX
+  Future<String> _generateAttendanceId() async {
+    const String prefix = 'idpr04';
+    final QuerySnapshot snapshot =
+        await FirebaseFirestore.instance.collection('presensi').get();
+
+    final int attendanceCount = snapshot.docs.length + 1;
+    final String formattedNumber = attendanceCount.toString().padLeft(4, '0');
+
+    return prefix + formattedNumber;
+  }
+
   Future<void> _saveAttendanceRecord() async {
     if (widget.user.nisn == null) return;
 
@@ -61,30 +73,28 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
       DateTime endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
       QuerySnapshot existingRecord = await FirebaseFirestore.instance
-          .collection('kehadiran')
+          .collection('presensi')
           .where('nisn', isEqualTo: widget.user.nisn)
-          .where('timestamp',
+          .where('tanggal_waktu',
               isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-          .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+          .where('tanggal_waktu',
+              isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
           .limit(1)
           .get();
 
       if (existingRecord.docs.isEmpty) {
-        // Create new attendance record
-        String docId =
-            FirebaseFirestore.instance.collection('kehadiran').doc().id;
+        // Generate new attendance ID
+        String attendanceId = await _generateAttendanceId();
 
+        // Create new attendance record in 'presensi' collection
         await FirebaseFirestore.instance
-            .collection('kehadiran')
-            .doc(docId)
+            .collection('presensi')
+            .doc(attendanceId)
             .set({
-          'id': docId,
+          'id_presensi': attendanceId,
           'nisn': widget.user.nisn,
-          'nama_siswa': studentName ?? widget.user.name,
-          'kelas': studentClass ?? 'Tidak diketahui',
-          'status': 'Hadir',
-          'timestamp': Timestamp.now(),
-          'id_wajah': widget.user.idWajah,
+          'tanggal_waktu': Timestamp.now(),
+          'status': 'hadir',
         });
 
         _showSuccessToast('Presensi berhasil dicatat!');
