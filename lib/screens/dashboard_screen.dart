@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:smart_presensee/screens/attendance_screen.dart';
 import 'package:smart_presensee/screens/authenticate_screen.dart';
 import 'package:smart_presensee/screens/profile_screen.dart';
 
@@ -221,6 +222,12 @@ class _DashboardScreenState extends State<DashboardPage> {
                 );
                 break;
               case 2:
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AttendanceScreen(),
+                  ),
+                );
                 // Riwayat/History - bisa ditambahkan nanti
                 break;
               case 3:
