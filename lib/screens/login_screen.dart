@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_detector/screens/presensi_screen.dart';
-import 'package:face_detector/screens/signup_screen.dart'; // Import signup screen
+import 'package:smart_presensee/screens/presensi_screen.dart';
+import 'package:smart_presensee/screens/signup_screen.dart'; // Import signup screen
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 

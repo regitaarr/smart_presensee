@@ -1,5 +1,5 @@
-import 'package:face_detector/screens/authenticate_screen.dart';
-import 'package:face_detector/screens/register_screen.dart';
+import 'package:smart_presensee/screens/authenticate_screen.dart';
+import 'package:smart_presensee/screens/register_screen.dart';
 import 'package:flutter/material.dart';
 
 class PresensiPage extends StatelessWidget {

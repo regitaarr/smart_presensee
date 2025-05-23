@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_detector/model/face_features.dart';
-import 'package:face_detector/model/user_model.dart';
-import 'package:face_detector/services/extract_features.dart';
-import 'package:face_detector/widgets/camera_view.dart';
+import 'package:smart_presensee/model/face_features.dart';
+import 'package:smart_presensee/model/user_model.dart';
+import 'package:smart_presensee/services/extract_features.dart';
+import 'package:smart_presensee/widgets/camera_view.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';

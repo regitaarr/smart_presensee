@@ -1,4 +1,4 @@
-import 'package:face_detector/model/user_model.dart';
+import 'package:smart_presensee/model/user_model.dart';
 import 'package:flutter/material.dart';
 
 class AuthenticatedUserScreen extends StatelessWidget {

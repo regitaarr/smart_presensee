@@ -1,6 +1,6 @@
 import 'dart:developer';
 
-import 'package:face_detector/model/face_features.dart';
+import 'package:smart_presensee/model/face_features.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 Future<FaceFeatures?> extractFaceFeatures(
