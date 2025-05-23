@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:smart_presensee/screens/authenticate_screen.dart';
 import 'package:smart_presensee/screens/profile_screen.dart';
 
@@ -21,30 +22,12 @@ class _DashboardScreenState extends State<DashboardPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header dengan greeting dan user icon
+            // Header dengan greeting dan user icon di kiri atas
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.face,
-                        size: 30,
-                        color: Colors.black54,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Hi, ${widget.userName}!',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ],
-                  ),
+                  // Profile icon di sebelah kiri
                   GestureDetector(
                     onTap: () {
                       Navigator.push(
@@ -66,6 +49,16 @@ class _DashboardScreenState extends State<DashboardPage> {
                         color: Colors.white,
                         size: 24,
                       ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Greeting text
+                  Text(
+                    'Hi, ${widget.userName}!',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
                     ),
                   ),
                 ],
@@ -90,22 +83,32 @@ class _DashboardScreenState extends State<DashboardPage> {
                 ),
                 child: Column(
                   children: [
-                    // Icon dan title
-                    const Icon(
-                      Icons.school,
-                      size: 60,
-                      color: Color(0xFF36C340),
+                    // Ganti icon dan teks dengan logo dan slogan
+                    const SizedBox(height: 40),
+                    Image.asset(
+                      'assets/images/logo1.png',
+                      width: 150,
+                      height: 150,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 10),
                     const Text(
                       'SMART PRESENSEE',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 25,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF36C340),
                       ),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 5),
+                    const Text(
+                      'Absen Digital. Sekolah Makin Pintar!',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Color(0xFFFFC107),
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
 
                     // Informasi jadwal
                     Container(
@@ -230,20 +233,25 @@ class _DashboardScreenState extends State<DashboardPage> {
           unselectedItemColor: Colors.grey,
           backgroundColor: Colors.white,
           elevation: 0,
-          items: const [
-            BottomNavigationBarItem(
+          items: [
+            // Hapus 'const' di sini
+            const BottomNavigationBarItem(
+              // Biarkan 'const' untuk item yang iconnya konstanta
               icon: Icon(Icons.home),
               label: 'Beranda',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.camera_alt),
+              // Hapus 'const' di sini
+              icon: Icon(MdiIcons.faceRecognition),
               label: 'Presensi',
             ),
-            BottomNavigationBarItem(
+            const BottomNavigationBarItem(
+              // Biarkan 'const' untuk item yang iconnya konstanta
               icon: Icon(Icons.check_circle),
               label: 'Kehadiran',
             ),
-            BottomNavigationBarItem(
+            const BottomNavigationBarItem(
+              // Biarkan 'const' untuk item yang iconnya konstanta
               icon: Icon(Icons.calendar_today),
               label: 'Jadwal',
             ),
