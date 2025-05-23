@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:smart_presensee/screens/presensi_screen.dart';
+import 'package:smart_presensee/screens/dashboard_screen.dart';
+// import 'package:smart_presensee/screens/presensi_screen.dart';
 import 'package:smart_presensee/screens/signup_screen.dart'; // Import signup screen
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -275,7 +276,7 @@ class _LoginPageState extends State<LoginPage> {
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) => const PresensiPage(),
+              builder: (context) => const DashboardPage(),
             ),
           );
         }
