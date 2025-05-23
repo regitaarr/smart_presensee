@@ -21,6 +21,146 @@ class AuthenticateScreen extends StatefulWidget {
 }
 
 class _AuthenticateScreenState extends State<AuthenticateScreen> {
+  // Function to generate attendance ID
+  Future<String> _generateAttendanceId() async {
+    try {
+      const String prefix = 'idpr04';
+
+      // Try to get the collection, if it doesn't exist it will return empty
+      final QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('presensi')
+          .get()
+          .catchError((e) {
+        log('Collection might not exist yet: $e');
+        return FirebaseFirestore.instance.collection('presensi').get();
+      });
+
+      final int attendanceCount = snapshot.docs.length + 1;
+      final String formattedNumber = attendanceCount.toString().padLeft(4, '0');
+
+      return prefix + formattedNumber;
+    } catch (e) {
+      log('Error generating attendance ID: $e');
+      // Return a default ID if error occurs
+      return 'idpr040001';
+    }
+  }
+
+  // Function to save attendance record
+  Future<void> _saveAttendanceRecord(UserModel user) async {
+    try {
+      // Check if user has NISN
+      if (user.nisn == null || user.nisn!.isEmpty) {
+        log('Error: User NISN is null or empty');
+        showToast('Error: NISN tidak ditemukan');
+        return;
+      }
+
+      log('Attempting to save attendance for NISN: ${user.nisn}');
+
+      // Check if attendance record already exists for today
+      DateTime now = DateTime.now();
+      DateTime startOfDay = DateTime(now.year, now.month, now.day);
+      DateTime endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+      // First, try to check existing records
+      QuerySnapshot? existingRecord;
+      try {
+        existingRecord = await FirebaseFirestore.instance
+            .collection('presensi')
+            .where('nisn', isEqualTo: user.nisn)
+            .where('tanggal_waktu',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+            .where('tanggal_waktu',
+                isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+            .limit(1)
+            .get();
+      } catch (e) {
+        log('Error checking existing record: $e');
+        // If collection doesn't exist, continue to create new record
+        existingRecord = null;
+      }
+
+      if (existingRecord == null || existingRecord.docs.isEmpty) {
+        // Generate new attendance ID
+        String attendanceId = await _generateAttendanceId();
+        log('Generated attendance ID: $attendanceId');
+
+        // Prepare data to save
+        Map<String, dynamic> attendanceData = {
+          'id_presensi': attendanceId,
+          'nisn': user.nisn,
+          'tanggal_waktu': Timestamp.now(),
+          'status':
+              'hadir', // Automatically set to 'hadir' for face recognition
+        };
+
+        log('Saving attendance data: $attendanceData');
+
+        // Create new attendance record
+        await FirebaseFirestore.instance
+            .collection('presensi')
+            .doc(attendanceId)
+            .set(attendanceData)
+            .then((_) {
+          log('Attendance saved successfully with ID: $attendanceId');
+          showToast('Presensi berhasil dicatat!');
+        }).catchError((error) {
+          log('Error saving to Firestore: $error');
+          showToast('Gagal menyimpan presensi: $error');
+        });
+      } else {
+        log('Attendance already exists for today');
+        showToast('Anda sudah melakukan presensi hari ini');
+      }
+    } catch (e) {
+      log('Unexpected error in _saveAttendanceRecord: $e');
+      showToast('Terjadi kesalahan: $e');
+    }
+  }
+
+  // Test function to create initial collection (for debugging)
+  Future<void> _testCreateCollection() async {
+    try {
+      await FirebaseFirestore.instance.collection('presensi').doc('test').set({
+        'test': true,
+        'created_at': Timestamp.now(),
+      }).then((_) {
+        log('Test document created successfully');
+        // Delete the test document
+        FirebaseFirestore.instance.collection('presensi').doc('test').delete();
+      });
+    } catch (e) {
+      log('Error creating test document: $e');
+    }
+  }
+
+  // Initialize Firestore collection if needed
+  Future<void> _initializeCollection() async {
+    try {
+      // Try to access the collection
+      await FirebaseFirestore.instance
+          .collection('presensi')
+          .limit(1)
+          .get()
+          .then((_) {
+        log('Presensi collection is accessible');
+      }).catchError((e) {
+        log('Collection might not exist, will be created on first save: $e');
+        // Optionally create a test document to ensure collection exists
+        // _testCreateCollection();
+      });
+    } catch (e) {
+      log('Error initializing collection: $e');
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeCollection();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,6 +206,25 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                       },
                     ),
             const SizedBox(height: 38),
+
+            // Debug button - hapus setelah testing
+            /*
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+              ),
+              child: const Text("Test Save Presensi"),
+              onPressed: () async {
+                // Test save dengan data dummy
+                UserModel testUser = UserModel(
+                  idWajah: 'test123',
+                  nisn: '1234567890',
+                  name: 'Test User',
+                );
+                await _saveAttendanceRecord(testUser);
+              },
+            ),
+            */
           ],
         ),
       ),
@@ -186,6 +345,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
         if (_similarity != "error" && double.parse(_similarity) > 90.00) {
           faceMatched = true;
           loggingUser = user.first;
+          log('Face matched for user: ${loggingUser?.name}, NISN: ${loggingUser?.nisn}');
         } else {
           faceMatched = false;
         }
@@ -195,6 +355,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
           trialNumber = 1;
           isMatching = false;
         });
+
+        // Save attendance record before navigating
+        await _saveAttendanceRecord(loggingUser!);
 
         if (mounted) {
           Navigator.of(context).push(
@@ -340,12 +503,14 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
     );
   }
 
-  void showToast(msg) {
+  void showToast(String msg) {
     Fluttertoast.showToast(
       msg: msg,
       toastLength: Toast.LENGTH_SHORT,
       gravity: ToastGravity.BOTTOM,
       timeInSecForIosWeb: 1,
+      backgroundColor: msg.contains('berhasil') ? Colors.green : Colors.red,
+      textColor: Colors.white,
     );
   }
 
