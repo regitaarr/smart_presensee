@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:smart_presensee/screens/authenticate_screen.dart';
 import 'package:smart_presensee/screens/profile_screen.dart';
-import 'package:smart_presensee/screens/presensi_screen.dart';
 
 class DashboardPage extends StatefulWidget {
   final String userName;
@@ -157,7 +157,7 @@ class _DashboardScreenState extends State<DashboardPage> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const PresensiPage(),
+                              builder: (context) => const AuthenticateScreen(),
                             ),
                           );
                         },
@@ -213,7 +213,7 @@ class _DashboardScreenState extends State<DashboardPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const PresensiPage(),
+                    builder: (context) => const AuthenticateScreen(),
                   ),
                 );
                 break;

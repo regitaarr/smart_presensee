@@ -270,13 +270,17 @@ class _LoginPageState extends State<LoginPage> {
 
       final userData = userQuery.docs.first.data() as Map<String, dynamic>;
       final String storedPassword = userData['password'] ?? '';
+      final String userName = userData['nama'] ??
+          userData['name'] ??
+          'User'; // Get user name from database
 
       if (password == storedPassword) {
         _showSuccessToast('Login berhasil!');
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) => const DashboardPage(),
+              builder: (context) =>
+                  DashboardPage(userName: userName), // Pass userName parameter
             ),
           );
         }
