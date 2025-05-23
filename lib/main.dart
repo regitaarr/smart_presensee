@@ -1,5 +1,3 @@
-// import 'package:face_detector/screens/presensi_screen.dart';
-// import 'package:face_detector/screens/login_screen.dart';
 import 'package:smart_presensee/screens/signup_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
