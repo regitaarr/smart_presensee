@@ -6,7 +6,13 @@ import 'dart:developer';
 
 class AuthenticatedUserScreen extends StatefulWidget {
   final UserModel user;
-  const AuthenticatedUserScreen({super.key, required this.user});
+  final bool attendanceAlreadySaved;
+
+  const AuthenticatedUserScreen({
+    super.key,
+    required this.user,
+    this.attendanceAlreadySaved = false,
+  });
 
   @override
   State<AuthenticatedUserScreen> createState() =>
@@ -17,12 +23,21 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
   bool _isLoading = false;
   String? studentName;
   String? studentClass;
+  bool _attendanceSaved = false;
 
   @override
   void initState() {
     super.initState();
     _loadStudentInfo();
-    _saveAttendanceRecord();
+
+    // FIXED: Jangan save lagi jika sudah tersimpan
+    if (widget.attendanceAlreadySaved) {
+      _attendanceSaved = true;
+      log('✅ Attendance already saved in authenticate screen');
+    } else {
+      log('⚠️ Attendance not saved yet, attempting backup save');
+      _saveAttendanceRecord();
+    }
   }
 
   Future<void> _loadStudentInfo() async {
@@ -47,20 +62,17 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
     }
   }
 
-  // Generate attendance ID with format idpr04XXXX
   Future<String> _generateAttendanceId() async {
     const String prefix = 'idpr04';
     final QuerySnapshot snapshot =
         await FirebaseFirestore.instance.collection('presensi').get();
-
     final int attendanceCount = snapshot.docs.length + 1;
-    final String formattedNumber = attendanceCount.toString().padLeft(4, '0');
-
-    return prefix + formattedNumber;
+    return prefix + attendanceCount.toString().padLeft(4, '0');
   }
 
+  // BACKUP: Save attendance jika belum tersimpan di authenticate screen
   Future<void> _saveAttendanceRecord() async {
-    if (widget.user.nisn == null) return;
+    if (widget.user.nisn == null || _attendanceSaved) return;
 
     setState(() {
       _isLoading = true;
@@ -69,7 +81,7 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
     try {
       // Check if attendance record already exists for today
       DateTime now = DateTime.now();
-      DateTime startOfDay = DateTime(now.year, now.month, now.day);
+      DateTime startOfDay = DateTime(now.year, now.month, now.day, 0, 0, 0);
       DateTime endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
       QuerySnapshot existingRecord = await FirebaseFirestore.instance
@@ -79,14 +91,14 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
               isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where('tanggal_waktu',
               isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
-          .limit(1)
           .get();
 
       if (existingRecord.docs.isEmpty) {
         // Generate new attendance ID
         String attendanceId = await _generateAttendanceId();
+        log('📝 Backup save - Generated attendance ID: $attendanceId');
 
-        // Create new attendance record in 'presensi' collection
+        // Create new attendance record
         await FirebaseFirestore.instance
             .collection('presensi')
             .doc(attendanceId)
@@ -97,13 +109,21 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
           'status': 'hadir',
         });
 
+        setState(() {
+          _attendanceSaved = true;
+        });
+
         _showSuccessToast('Presensi berhasil dicatat!');
+        log('✅ Backup save - Attendance saved successfully');
       } else {
-        _showInfoToast('Anda sudah melakukan presensi hari ini');
+        setState(() {
+          _attendanceSaved = true;
+        });
+        log('ℹ️ Attendance already exists, not saving duplicate');
       }
     } catch (e) {
-      log('Error saving attendance: $e');
-      _showErrorToast('Gagal menyimpan data presensi');
+      log('❌ Error in backup save attendance: $e');
+      _showErrorToast('Terjadi kesalahan saat menyimpan data');
     } finally {
       setState(() {
         _isLoading = false;
@@ -127,16 +147,6 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
       toastLength: Toast.LENGTH_LONG,
       gravity: ToastGravity.BOTTOM,
       backgroundColor: Colors.red,
-      textColor: Colors.white,
-    );
-  }
-
-  void _showInfoToast(String message) {
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_LONG,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.orange,
       textColor: Colors.white,
     );
   }
@@ -215,9 +225,9 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
 
                     const SizedBox(height: 16),
 
-                    const Text(
+                    Text(
                       "Presensi Berhasil Dicatat",
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 18,
                         color: Color(0xFF4CAF50),
@@ -261,13 +271,55 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
                     const SizedBox(height: 30),
 
                     if (_isLoading)
-                      const CircularProgressIndicator(
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+                      const Column(
+                        children: [
+                          CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF4CAF50)),
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Memproses data presensi...',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
                       )
                     else
                       Column(
                         children: [
+                          // Status indicator
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 20),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: Colors.green.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.check_circle,
+                                    color: Colors.green, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  widget.attendanceAlreadySaved
+                                      ? 'Data tersimpan otomatis'
+                                      : 'Data berhasil disimpan',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
                           // Back to dashboard button
                           SizedBox(
                             width: double.infinity,

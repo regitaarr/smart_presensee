@@ -21,138 +21,188 @@ class AuthenticateScreen extends StatefulWidget {
 }
 
 class _AuthenticateScreenState extends State<AuthenticateScreen> {
-  // Function to generate attendance ID
+  // Function to generate attendance ID - ENHANCED VERSION
   Future<String> _generateAttendanceId() async {
     try {
       const String prefix = 'idpr04';
 
-      // Try to get the collection, if it doesn't exist it will return empty
-      final QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('presensi')
-          .get()
-          .catchError((e) {
-        log('Collection might not exist yet: $e');
-        return FirebaseFirestore.instance.collection('presensi').get();
-      });
+      // Use server timestamp for consistency
+      DateTime now = DateTime.now();
+      String dateString =
+          '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
 
-      final int attendanceCount = snapshot.docs.length + 1;
-      final String formattedNumber = attendanceCount.toString().padLeft(4, '0');
+      // Get count of today's attendance records
+      DateTime todayStart = DateTime(now.year, now.month, now.day);
+      DateTime todayEnd =
+          DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
 
-      return prefix + formattedNumber;
+      try {
+        QuerySnapshot todaySnapshot = await FirebaseFirestore.instance
+            .collection('presensi')
+            .where('tanggal_waktu',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+            .where('tanggal_waktu',
+                isLessThanOrEqualTo: Timestamp.fromDate(todayEnd))
+            .get();
+
+        final int todayCount = todaySnapshot.docs.length + 1;
+        final String formattedNumber = todayCount.toString().padLeft(3, '0');
+
+        return '$prefix$dateString$formattedNumber';
+      } catch (e) {
+        log('Error getting today\'s count, using fallback: $e');
+        // Fallback: use timestamp
+        String timestamp = now.millisecondsSinceEpoch.toString();
+        return '$prefix$dateString${timestamp.substring(timestamp.length - 3)}';
+      }
     } catch (e) {
       log('Error generating attendance ID: $e');
-      // Return a default ID if error occurs
-      return 'idpr040001';
+      // Ultimate fallback
+      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      return 'idpr04${timestamp.substring(timestamp.length - 8)}';
     }
   }
 
-  // Function to save attendance record
+  // Function to save attendance record - IMPROVED VERSION WITH DUPLICATE PREVENTION
   Future<void> _saveAttendanceRecord(UserModel user) async {
     try {
-      // Check if user has NISN
-      if (user.nisn == null || user.nisn!.isEmpty) {
+      // Validate NISN
+      if (user.nisn == null || user.nisn!.trim().isEmpty) {
         log('Error: User NISN is null or empty');
         showToast('Error: NISN tidak ditemukan');
         return;
       }
 
-      log('Attempting to save attendance for NISN: ${user.nisn}');
+      final String nisn = user.nisn!.trim();
+      log('Attempting to save attendance for NISN: $nisn');
 
-      // Check if attendance record already exists for today
+      // Get current date without time (set to start of day)
       DateTime now = DateTime.now();
-      DateTime startOfDay = DateTime(now.year, now.month, now.day);
-      DateTime endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      DateTime todayStart = DateTime(now.year, now.month, now.day);
+      DateTime todayEnd =
+          DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
 
-      // First, try to check existing records
-      QuerySnapshot? existingRecord;
+      log('Checking attendance for date range: ${todayStart} to ${todayEnd}');
+
+      // Check if attendance already exists for this NISN today
       try {
-        existingRecord = await FirebaseFirestore.instance
+        final QuerySnapshot existingRecords = await FirebaseFirestore.instance
             .collection('presensi')
-            .where('nisn', isEqualTo: user.nisn)
+            .where('nisn', isEqualTo: nisn)
             .where('tanggal_waktu',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+                isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
             .where('tanggal_waktu',
-                isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+                isLessThanOrEqualTo: Timestamp.fromDate(todayEnd))
             .limit(1)
             .get();
+
+        if (existingRecords.docs.isNotEmpty) {
+          // Get the existing record details
+          var existingDoc = existingRecords.docs.first;
+          var existingData = existingDoc.data() as Map<String, dynamic>;
+          var existingTime =
+              (existingData['tanggal_waktu'] as Timestamp).toDate();
+
+          log('Attendance already exists for NISN $nisn on ${existingTime.toString()}');
+          showToast(
+              'Anda sudah melakukan presensi hari ini pada ${_formatTime(existingTime)}');
+          return;
+        }
+
+        log('No existing attendance found for NISN $nisn today. Proceeding to save new record.');
       } catch (e) {
-        log('Error checking existing record: $e');
-        // If collection doesn't exist, continue to create new record
-        existingRecord = null;
+        log('Error checking existing records: $e');
+        // If there's an error checking (e.g., collection doesn't exist),
+        // we'll continue to create the record
+        log('Proceeding with attendance creation despite check error');
       }
 
-      if (existingRecord == null || existingRecord.docs.isEmpty) {
-        // Generate new attendance ID
-        String attendanceId = await _generateAttendanceId();
-        log('Generated attendance ID: $attendanceId');
+      // Generate new attendance ID
+      String attendanceId = await _generateAttendanceId();
+      log('Generated attendance ID: $attendanceId');
 
-        // Prepare data to save
-        Map<String, dynamic> attendanceData = {
-          'id_presensi': attendanceId,
-          'nisn': user.nisn,
-          'tanggal_waktu': Timestamp.now(),
-          'status':
-              'hadir', // Automatically set to 'hadir' for face recognition
-        };
+      // Prepare attendance data
+      Map<String, dynamic> attendanceData = {
+        'id_presensi': attendanceId,
+        'nisn': nisn,
+        'nama': user.name ?? '', // Add name for easier identification
+        'tanggal_waktu': Timestamp.now(),
+        'status': 'hadir',
+        'created_at':
+            FieldValue.serverTimestamp(), // Server timestamp for consistency
+        'metode': 'face_recognition', // Add method for tracking
+      };
 
-        log('Saving attendance data: $attendanceData');
+      log('Saving attendance data: $attendanceData');
+
+      // Use transaction to ensure data consistency and prevent race conditions
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        // Double-check in transaction to prevent race conditions
+        final QuerySnapshot doubleCheck = await FirebaseFirestore.instance
+            .collection('presensi')
+            .where('nisn', isEqualTo: nisn)
+            .where('tanggal_waktu',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+            .where('tanggal_waktu',
+                isLessThanOrEqualTo: Timestamp.fromDate(todayEnd))
+            .limit(1)
+            .get();
+
+        if (doubleCheck.docs.isNotEmpty) {
+          log('Race condition detected: Record already exists during transaction');
+          throw Exception('Attendance already recorded today');
+        }
 
         // Create new attendance record
-        await FirebaseFirestore.instance
-            .collection('presensi')
-            .doc(attendanceId)
-            .set(attendanceData)
-            .then((_) {
-          log('Attendance saved successfully with ID: $attendanceId');
-          showToast('Presensi berhasil dicatat!');
-        }).catchError((error) {
-          log('Error saving to Firestore: $error');
-          showToast('Gagal menyimpan presensi: $error');
-        });
-      } else {
-        log('Attendance already exists for today');
+        DocumentReference docRef =
+            FirebaseFirestore.instance.collection('presensi').doc(attendanceId);
+
+        transaction.set(docRef, attendanceData);
+      });
+
+      log('Attendance saved successfully with ID: $attendanceId');
+      showToast(
+          'Presensi berhasil dicatat pada ${_formatTime(DateTime.now())}!');
+    } catch (e) {
+      log('Error in _saveAttendanceRecord: $e');
+
+      if (e.toString().contains('Attendance already recorded today')) {
         showToast('Anda sudah melakukan presensi hari ini');
+      } else {
+        showToast(
+            'Terjadi kesalahan saat menyimpan presensi. Silahkan coba lagi.');
       }
-    } catch (e) {
-      log('Unexpected error in _saveAttendanceRecord: $e');
-      showToast('Terjadi kesalahan: $e');
     }
   }
 
-  // Test function to create initial collection (for debugging)
-  Future<void> _testCreateCollection() async {
-    try {
-      await FirebaseFirestore.instance.collection('presensi').doc('test').set({
-        'test': true,
-        'created_at': Timestamp.now(),
-      }).then((_) {
-        log('Test document created successfully');
-        // Delete the test document
-        FirebaseFirestore.instance.collection('presensi').doc('test').delete();
-      });
-    } catch (e) {
-      log('Error creating test document: $e');
-    }
+  // Helper function to format time for display
+  String _formatTime(DateTime dateTime) {
+    return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
-  // Initialize Firestore collection if needed
+  // Helper function to format date for display
+  String _formatDate(DateTime dateTime) {
+    List<String> months = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember'
+    ];
+    return '${dateTime.day} ${months[dateTime.month - 1]} ${dateTime.year}';
+  }
+
+  // Initialize Firestore collection if needed - SIMPLIFIED
   Future<void> _initializeCollection() async {
-    try {
-      // Try to access the collection
-      await FirebaseFirestore.instance
-          .collection('presensi')
-          .limit(1)
-          .get()
-          .then((_) {
-        log('Presensi collection is accessible');
-      }).catchError((e) {
-        log('Collection might not exist, will be created on first save: $e');
-        // Optionally create a test document to ensure collection exists
-        // _testCreateCollection();
-      });
-    } catch (e) {
-      log('Error initializing collection: $e');
-    }
+    // Firestore will create collection automatically on first save
+    log('Firestore will create collection automatically on first save');
   }
 
   @override
@@ -168,10 +218,46 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
         centerTitle: true,
         title: const Text("Presensi Wajah"),
         elevation: 0,
+        backgroundColor: Colors.blueAccent,
+        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         child: Column(
           children: [
+            // Date Display
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16.0),
+              margin: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Tanggal Hari Ini',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.blue.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatDate(DateTime.now()),
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.blue.shade900,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Camera View
             CameraView(
               onImage: (image) {
                 _setImage(image);
@@ -183,48 +269,103 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                 setState(() => isMatching = false);
               },
             ),
-            // TODO Clear comment
-            /*if (isMatching)
-              const Align(
-                alignment: Alignment.center,
-                child: Padding(
-                  padding: EdgeInsets.only(top: 64),
-                  child: AnimatedView(),
-                ),
-              ),*/
 
+            const SizedBox(height: 20),
+
+            // Status and Button
             if (_canAuthenticate)
               isMatching
-                  ? const Center(
-                      child: CircularProgressIndicator(),
+                  ? Container(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          const CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.blueAccent),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Sedang memproses wajah...',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
                     )
-                  : ElevatedButton(
-                      child: const Text("Presensi"),
-                      onPressed: () {
-                        setState(() => isMatching = true);
-                        _fetchUsersAndMatchFace();
-                      },
+                  : Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: const Text(
+                          "Lakukan Presensi",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onPressed: () {
+                          setState(() => isMatching = true);
+                          _fetchUsersAndMatchFace();
+                        },
+                      ),
                     ),
-            const SizedBox(height: 38),
 
-            // Debug button - hapus setelah testing
-            /*
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
+            const SizedBox(height: 20),
+
+            // Instructions
+            if (!_canAuthenticate)
+              Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.orange.shade700,
+                      size: 24,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Petunjuk Presensi',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange.shade800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '1. Posisikan wajah Anda di tengah kamera\n'
+                      '2. Pastikan pencahayaan cukup\n'
+                      '3. Hindari menggunakan masker atau kacamata\n'
+                      '4. Tekan tombol "Lakukan Presensi" setelah wajah terdeteksi',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.orange.shade700,
+                      ),
+                      textAlign: TextAlign.left,
+                    ),
+                  ],
+                ),
               ),
-              child: const Text("Test Save Presensi"),
-              onPressed: () async {
-                // Test save dengan data dummy
-                UserModel testUser = UserModel(
-                  idWajah: 'test123',
-                  nisn: '1234567890',
-                  name: 'Test User',
-                );
-                await _saveAttendanceRecord(testUser);
-              },
-            ),
-            */
+
+            const SizedBox(height: 38),
           ],
         ),
       ),
@@ -285,7 +426,6 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
   }
 
   _fetchUsersAndMatchFace() {
-    // ignore: body_might_complete_normally_catch_error
     FirebaseFirestore.instance.collection("wajah_siswa").get().catchError((e) {
       log("Getting User Error: $e");
       setState(() => isMatching = false);
@@ -313,7 +453,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
       } else {
         _showFailureDialog(
           title: "Wajah tidak terdaftar",
-          description: "Pastikah wajah terdaftar di database.",
+          description: "Pastikan wajah terdaftar di database.",
         );
       }
     });
@@ -350,14 +490,15 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
           faceMatched = false;
         }
       });
+
       if (faceMatched) {
+        // Save attendance record first
+        await _saveAttendanceRecord(loggingUser!);
+
         setState(() {
           trialNumber = 1;
           isMatching = false;
         });
-
-        // Save attendance record before navigating
-        await _saveAttendanceRecord(loggingUser!);
 
         if (mounted) {
           Navigator.of(context).push(
@@ -369,6 +510,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
         break;
       }
     }
+
     if (!faceMatched) {
       if (trialNumber == 4) {
         setState(() => trialNumber = 1);
@@ -394,25 +536,38 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                 title: const Text("Masukkan nama"),
                 content: TextFormField(
                   controller: _nameController,
-                  cursorColor: Colors.redAccent,
+                  cursorColor: Colors.blueAccent,
                   decoration: InputDecoration(
                     enabledBorder: OutlineInputBorder(
                       borderSide: const BorderSide(
                         width: 2,
-                        color: Colors.redAccent,
+                        color: Colors.blueAccent,
                       ),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderSide: const BorderSide(
                         width: 2,
-                        color: Colors.redAccent,
+                        color: Colors.blueAccent,
                       ),
                       borderRadius: BorderRadius.circular(4),
                     ),
+                    hintText: 'Masukkan nama lengkap',
                   ),
                 ),
                 actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      setState(() => trialNumber = 1);
+                    },
+                    child: const Text(
+                      "Batal",
+                      style: TextStyle(
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
                   TextButton(
                     onPressed: () {
                       if (_nameController.text.trim().isEmpty) {
@@ -424,9 +579,10 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                       }
                     },
                     child: const Text(
-                      "Done",
+                      "Cari",
                       style: TextStyle(
-                        color: Colors.redAccent,
+                        color: Colors.blueAccent,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   )
@@ -449,7 +605,6 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
         .collection("wajah_siswa")
         .where("organizationId", isEqualTo: orgID)
         .get()
-        // ignore: body_might_complete_normally_catch_error
         .catchError((e) {
       log("Getting User Error: $e");
       setState(() => isMatching = false);
@@ -468,7 +623,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
         setState(() => trialNumber = 1);
         _showFailureDialog(
           title: "Wajah tidak terdaftar",
-          description: "Pastikah wajah terdaftar di database.",
+          description: "Pastikan wajah terdaftar di database.",
         );
       }
     });
@@ -483,7 +638,12 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text(title),
+          title: Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           content: Text(description),
           actions: [
             TextButton(
@@ -493,7 +653,8 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
               child: const Text(
                 "Ok",
                 style: TextStyle(
-                  color: Colors.redAccent,
+                  color: Colors.blueAccent,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             )
@@ -511,6 +672,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
       timeInSecForIosWeb: 1,
       backgroundColor: msg.contains('berhasil') ? Colors.green : Colors.red,
       textColor: Colors.white,
+      fontSize: 14.0,
     );
   }
 
@@ -538,6 +700,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
   @override
   void dispose() {
     _faceDetector.close();
+    _nameController.dispose();
     super.dispose();
   }
 }

@@ -17,7 +17,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   DateTime selectedDate = DateTime.now();
   String? errorMessage;
 
-  // Status options dengan warna yang lebih jelas
   final List<String> statusOptions = ['hadir', 'sakit', 'izin', 'alpha'];
   final Map<String, Color> statusColors = {
     'hadir': Colors.green,
@@ -48,7 +47,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
       log('=== MULAI LOAD DATA SISWA ===');
 
-      // Step 1: Load semua siswa dari collection 'siswa'
+      // Load semua siswa dari collection 'siswa'
       QuerySnapshot studentSnapshot = await FirebaseFirestore.instance
           .collection('siswa')
           .orderBy('nama_siswa')
@@ -66,7 +65,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
       List<StudentAttendanceModel> tempList = [];
 
-      // Step 2: Proses setiap siswa
+      // Proses setiap siswa
       for (var doc in studentSnapshot.docs) {
         try {
           Map<String, dynamic> studentData = doc.data() as Map<String, dynamic>;
@@ -74,7 +73,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
           log('Processing siswa: $nisn - ${studentData['nama_siswa']}');
 
-          // Step 3: Cek apakah wajah sudah terdaftar
+          // Cek apakah wajah sudah terdaftar
           QuerySnapshot faceSnapshot = await FirebaseFirestore.instance
               .collection('wajah_siswa')
               .where('nisn', isEqualTo: nisn)
@@ -83,10 +82,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
           bool hasFaceRegistered = faceSnapshot.docs.isNotEmpty;
 
-          // Step 4: Cek status presensi hari ini
+          // FIXED: Cek status presensi untuk tanggal yang dipilih
           String todayStatus = await _getTodayAttendanceStatus(nisn);
 
-          // Step 5: Buat model dan tambahkan ke list
           tempList.add(StudentAttendanceModel(
             nisn: nisn,
             nama: studentData['nama_siswa'] ?? 'Nama tidak tersedia',
@@ -119,13 +117,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
-  // Method untuk mendapatkan status presensi hari ini
+  // FIXED: Method untuk mendapatkan status presensi yang lebih akurat
   Future<String> _getTodayAttendanceStatus(String nisn) async {
     try {
+      // FIXED: Gunakan tanggal yang dipilih, bukan DateTime.now()
       DateTime startOfDay =
           DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
       DateTime endOfDay = DateTime(
           selectedDate.year, selectedDate.month, selectedDate.day, 23, 59, 59);
+
+      log('Checking attendance for NISN $nisn on ${selectedDate.toIso8601String().substring(0, 10)}');
 
       QuerySnapshot attendanceSnapshot = await FirebaseFirestore.instance
           .collection('presensi')
@@ -140,10 +141,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       if (attendanceSnapshot.docs.isNotEmpty) {
         Map<String, dynamic> attendanceData =
             attendanceSnapshot.docs.first.data() as Map<String, dynamic>;
-        return attendanceData['status'] ?? 'alpha';
+        String status = attendanceData['status'] ?? 'alpha';
+        log('Found attendance status for $nisn: $status');
+        return status;
       } else {
-        // Jika belum ada data presensi, default ke 'alpha'
-        return 'alpha';
+        log('No attendance found for $nisn on selected date');
+        return 'alpha'; // Default jika belum ada presensi
       }
     } catch (e) {
       log('Error getting attendance status for $nisn: $e');
@@ -151,7 +154,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
-  // Generate attendance ID
   Future<String> _generateAttendanceId() async {
     const String prefix = 'idpr04';
     final QuerySnapshot snapshot =
@@ -161,11 +163,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return prefix + formattedNumber;
   }
 
+  // FIXED: Method untuk mark attendance dengan penanganan yang lebih baik
   Future<void> _markAttendance(String nisn, String status) async {
     try {
       log('Marking attendance untuk NISN: $nisn dengan status: $status');
 
-      // Check if attendance already exists for today
+      // FIXED: Gunakan tanggal yang dipilih untuk check existing attendance
       DateTime startOfDay =
           DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
       DateTime endOfDay = DateTime(
@@ -189,26 +192,39 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             .doc(docId)
             .update({
           'status': status,
-          'tanggal_waktu': Timestamp.now(),
+          // FIXED: Jangan update tanggal_waktu jika hanya mengubah status
+          // 'tanggal_waktu': Timestamp.now(),
         });
         log('Updated existing attendance: $docId');
       } else {
         // Create new attendance record
         String attendanceId = await _generateAttendanceId();
+
+        // FIXED: Untuk data baru, gunakan tanggal yang dipilih dengan waktu sekarang
+        DateTime attendanceDateTime = DateTime(
+          selectedDate.year,
+          selectedDate.month,
+          selectedDate.day,
+          DateTime.now().hour,
+          DateTime.now().minute,
+          DateTime.now().second,
+        );
+
         await FirebaseFirestore.instance
             .collection('presensi')
             .doc(attendanceId)
             .set({
           'id_presensi': attendanceId,
           'nisn': nisn,
-          'tanggal_waktu': Timestamp.now(),
+          'tanggal_waktu': Timestamp.fromDate(attendanceDateTime),
           'status': status,
         });
         log('Created new attendance: $attendanceId');
       }
 
       _showToast('Status presensi berhasil diperbarui');
-      _loadStudentData(); // Reload data
+      // FIXED: Reload data setelah update
+      await _loadStudentData();
     } catch (e) {
       log('Error marking attendance: $e');
       _showToast('Gagal memperbarui status presensi: ${e.toString()}');
@@ -331,12 +347,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       context: context,
                       initialDate: selectedDate,
                       firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
+                      lastDate: DateTime.now().add(
+                          const Duration(days: 1)), // FIXED: Allow future dates
                     );
                     if (picked != null && picked != selectedDate) {
                       setState(() {
                         selectedDate = picked;
                       });
+                      // FIXED: Reload data ketika tanggal berubah
                       _loadStudentData();
                     }
                   },
@@ -651,7 +669,7 @@ class StudentAttendanceModel {
   });
 }
 
-// Attendance History Screen (tetap sama seperti sebelumnya)
+// Attendance History Screen (unchanged)
 class AttendanceHistoryScreen extends StatefulWidget {
   final StudentAttendanceModel student;
 
