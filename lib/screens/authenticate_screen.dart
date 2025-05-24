@@ -21,28 +21,131 @@ class AuthenticateScreen extends StatefulWidget {
 }
 
 class _AuthenticateScreenState extends State<AuthenticateScreen> {
-  // Function to generate attendance ID - SIMPLE and RELIABLE VERSION
+  // Function to generate attendance ID - SEQUENTIAL VERSION
   Future<String> _generateAttendanceId() async {
     try {
       const String prefix = 'idpr04';
 
-      // Get current timestamp for uniqueness
-      DateTime now = DateTime.now();
-      String dateString =
-          '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-      String timeString =
-          '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+      // Query untuk mendapatkan ID terakhir dengan prefix yang sama
+      QuerySnapshot lastRecords = await FirebaseFirestore.instance
+          .collection('presensi')
+          .where('id_presensi', isGreaterThanOrEqualTo: prefix)
+          .where('id_presensi',
+              isLessThan:
+                  prefix + 'z') // Untuk memastikan hanya prefix yang tepat
+          .orderBy('id_presensi', descending: true)
+          .limit(1)
+          .get();
 
-      // Create unique ID with timestamp
-      String uniqueId = '$prefix$dateString$timeString';
+      int nextNumber = 1; // Default jika belum ada data
 
-      log('Generated attendance ID: $uniqueId');
-      return uniqueId;
+      if (lastRecords.docs.isNotEmpty) {
+        String lastId = lastRecords.docs.first.get('id_presensi') as String;
+        log('Last attendance ID found: $lastId');
+
+        // Extract 4 digit terakhir dari ID
+        if (lastId.length >= 10 && lastId.startsWith(prefix)) {
+          String lastNumberStr = lastId.substring(6); // Ambil 4 digit terakhir
+          int lastNumber = int.tryParse(lastNumberStr) ?? 0;
+          nextNumber = lastNumber + 1;
+        }
+      }
+
+      // Format 4 digit dengan leading zeros
+      String formattedNumber = nextNumber.toString().padLeft(4, '0');
+      String newId = '$prefix$formattedNumber';
+
+      // Validasi panjang ID (harus tepat 10 karakter)
+      if (newId.length != 10) {
+        throw Exception('Generated ID length is not 10 characters: $newId');
+      }
+
+      // Double-check apakah ID sudah ada (untuk menghindari duplicate)
+      DocumentSnapshot existingDoc = await FirebaseFirestore.instance
+          .collection('presensi')
+          .doc(newId)
+          .get();
+
+      if (existingDoc.exists) {
+        // Jika ID sudah ada, coba lagi dengan increment
+        log('ID $newId already exists, trying next number...');
+        nextNumber++;
+        formattedNumber = nextNumber.toString().padLeft(4, '0');
+        newId = '$prefix$formattedNumber';
+      }
+
+      log('Generated attendance ID: $newId');
+      return newId;
     } catch (e) {
       log('Error generating attendance ID: $e');
-      // Fallback with milliseconds
-      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      return 'idpr04${timestamp.substring(timestamp.length - 10)}';
+
+      // Fallback: gunakan timestamp sebagai 4 digit terakhir
+      DateTime now = DateTime.now();
+      String timeString =
+          '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+      String fallbackId = 'idpr04$timeString';
+
+      log('Using fallback ID: $fallbackId');
+      return fallbackId;
+    }
+  }
+
+  // Alternative function with transaction for better concurrency handling
+  Future<String> _generateAttendanceIdWithTransaction() async {
+    try {
+      const String prefix = 'idpr04';
+
+      // Menggunakan transaction untuk menghindari race condition
+      return await FirebaseFirestore.instance
+          .runTransaction<String>((transaction) async {
+        // Query untuk mendapatkan ID terakhir
+        QuerySnapshot lastRecords = await FirebaseFirestore.instance
+            .collection('presensi')
+            .where('id_presensi', isGreaterThanOrEqualTo: prefix)
+            .where('id_presensi', isLessThan: prefix + 'z')
+            .orderBy('id_presensi', descending: true)
+            .limit(1)
+            .get();
+
+        int nextNumber = 1;
+
+        if (lastRecords.docs.isNotEmpty) {
+          String lastId = lastRecords.docs.first.get('id_presensi') as String;
+          if (lastId.length >= 10 && lastId.startsWith(prefix)) {
+            String lastNumberStr = lastId.substring(6);
+            int lastNumber = int.tryParse(lastNumberStr) ?? 0;
+            nextNumber = lastNumber + 1;
+          }
+        }
+
+        // Cek beberapa ID berikutnya sampai menemukan yang kosong
+        for (int attempt = 0; attempt < 100; attempt++) {
+          String formattedNumber =
+              (nextNumber + attempt).toString().padLeft(4, '0');
+          String candidateId = '$prefix$formattedNumber';
+
+          // Cek apakah ID sudah ada
+          DocumentSnapshot existingDoc = await transaction.get(FirebaseFirestore
+              .instance
+              .collection('presensi')
+              .doc(candidateId));
+
+          if (!existingDoc.exists) {
+            log('Generated attendance ID: $candidateId');
+            return candidateId;
+          }
+        }
+
+        throw Exception('Could not generate unique ID after 100 attempts');
+      });
+    } catch (e) {
+      log('Error in transaction: $e');
+
+      // Fallback
+      DateTime now = DateTime.now();
+      String timeString =
+          '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+      return 'idpr04$timeString';
     }
   }
 
@@ -91,24 +194,26 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
     try {
       // Validate NISN
       if (user.nisn == null || user.nisn!.trim().isEmpty) {
-        log('❌ Error: User NISN is null or empty');
+        log('Error: User NISN is null or empty');
         showToast('Error: NISN tidak ditemukan', isError: true);
         return false;
       }
 
       final String nisn = user.nisn!.trim();
-      log('🔄 Starting attendance save process for NISN: $nisn');
+      log('Starting attendance save process for NISN: $nisn');
 
       // Check if already attended today
       bool hasAttendedToday = await _checkTodayAttendance(nisn);
       if (hasAttendedToday) {
-        log('⚠️ Attendance already exists for NISN $nisn today');
+        log('Attendance already exists for NISN $nisn today');
         showToast('Anda sudah melakukan presensi hari ini!', isError: true);
         return false;
       }
 
-      // Generate attendance ID
+      // Generate attendance ID - Using the new sequential method
       String attendanceId = await _generateAttendanceId();
+      // Or use transaction version for better concurrency:
+      // String attendanceId = await _generateAttendanceIdWithTransaction();
 
       // Prepare attendance data
       Map<String, dynamic> attendanceData = {
@@ -121,7 +226,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
         'created_at': FieldValue.serverTimestamp(),
       };
 
-      log('📝 Saving attendance data: $attendanceData');
+      log('Saving attendance data: $attendanceData');
 
       // Save to Firestore with error handling
       await FirebaseFirestore.instance
@@ -129,7 +234,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
           .doc(attendanceId)
           .set(attendanceData);
 
-      log('✅ Attendance saved successfully with ID: $attendanceId');
+      log('Attendance saved successfully with ID: $attendanceId');
 
       // Verify the save by reading back
       DocumentSnapshot savedDoc = await FirebaseFirestore.instance
@@ -138,18 +243,18 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
           .get();
 
       if (savedDoc.exists) {
-        log('✅ Verified: Attendance record exists in Firestore');
+        log('Verified: Attendance record exists in Firestore');
         showToast(
             'Presensi berhasil dicatat pada ${_formatTime(DateTime.now())}!');
         return true;
       } else {
-        log('❌ Error: Failed to verify saved attendance record');
+        log('Error: Failed to verify saved attendance record');
         showToast('Gagal menyimpan presensi. Silakan coba lagi.',
             isError: true);
         return false;
       }
     } catch (e) {
-      log('❌ Error in _saveAttendanceRecord: $e');
+      log('Error in _saveAttendanceRecord: $e');
       showToast('Terjadi kesalahan saat menyimpan presensi: ${e.toString()}',
           isError: true);
       return false;
@@ -183,7 +288,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
   @override
   void initState() {
     super.initState();
-    log('🚀 AuthenticateScreen initialized');
+    log('AuthenticateScreen initialized');
   }
 
   @override
@@ -191,9 +296,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
-        title: const Text("Presensi Wajah"),
+        title: const Text("Presensi Face Recognition"),
         elevation: 0,
-        backgroundColor: Colors.blueAccent,
+        backgroundColor: Colors.green,
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
@@ -205,9 +310,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
               padding: const EdgeInsets.all(16.0),
               margin: const EdgeInsets.all(16.0),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: Colors.green.shade50,
                 borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(color: Colors.blue.shade200),
+                border: Border.all(color: Colors.green.shade200),
               ),
               child: Column(
                 children: [
@@ -215,7 +320,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                     'Tanggal Hari Ini',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.blue.shade700,
+                      color: Colors.green.shade700,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -224,7 +329,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                     _formatDate(DateTime.now()),
                     style: TextStyle(
                       fontSize: 18,
-                      color: Colors.blue.shade900,
+                      color: Colors.green.shade900,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -255,8 +360,8 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                       child: Column(
                         children: [
                           const CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.blueAccent),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.green),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -274,7 +379,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
+                          backgroundColor: Colors.green,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
