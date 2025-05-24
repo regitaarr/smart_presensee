@@ -375,7 +375,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                       ),
                     )
                   : Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: 125),
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(

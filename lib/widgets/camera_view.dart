@@ -89,25 +89,27 @@ class _CameraViewState extends State<CameraView> {
           ),
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton.icon(
-            onPressed: _getImage,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4CAF50),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(25),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 70),
+          child: SizedBox(
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _getImage,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4CAF50),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                elevation: 2,
               ),
-              elevation: 2,
-            ),
-            icon: const Icon(Icons.camera_alt, size: 20),
-            label: Text(
-              _image != null ? "Ambil Foto Ulang" : "Ambil Foto Wajah",
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+              icon: const Icon(Icons.camera_alt, size: 20),
+              label: Text(
+                _image != null ? "Ambil Foto Ulang" : "Ambil Foto Wajah",
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
