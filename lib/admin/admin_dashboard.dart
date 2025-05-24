@@ -4,6 +4,7 @@ import 'package:smart_presensee/screens/login_screen.dart';
 import 'package:smart_presensee/screens/student_screen.dart';
 import 'package:smart_presensee/screens/attendance_screen.dart';
 import 'package:smart_presensee/screens/register_screen.dart';
+import 'package:smart_presensee/admin/admin_schedule.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'dart:developer';
 
@@ -99,7 +100,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         backgroundColor: const Color(0xFF4CAF50),
         elevation: 0,
         title: const Text(
-          'Admin Dashboard',
+          'Beranda Admin',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -289,6 +290,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             ),
                           ),
                           _buildActionCard(
+                            'Kelola Jadwal',
+                            'Atur jadwal pelajaran',
+                            Icons.schedule,
+                            const Color(0xFFFF5722),
+                            () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const AdminScheduleScreen(),
+                              ),
+                            ),
+                          ),
+                          _buildActionCard(
                             'Laporan',
                             'Generate laporan presensi',
                             Icons.assessment,
@@ -381,7 +395,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.dashboard),
-              label: 'Dashboard',
+              label: 'Beranda',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.people),
@@ -392,8 +406,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
               label: 'Presensi',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.settings),
-              label: 'Pengaturan',
+              icon: Icon(Icons.schedule),
+              label: 'Jadwal',
             ),
           ],
         ),
@@ -552,7 +566,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
         );
         break;
       case 3:
-        _showComingSoonDialog('Pengaturan');
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AdminScheduleScreen(),
+          ),
+        );
         break;
     }
   }
