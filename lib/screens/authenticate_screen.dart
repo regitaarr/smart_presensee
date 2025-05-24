@@ -21,157 +21,138 @@ class AuthenticateScreen extends StatefulWidget {
 }
 
 class _AuthenticateScreenState extends State<AuthenticateScreen> {
-  // Function to generate attendance ID - ENHANCED VERSION
+  // Function to generate attendance ID - SIMPLE and RELIABLE VERSION
   Future<String> _generateAttendanceId() async {
     try {
       const String prefix = 'idpr04';
 
-      // Use server timestamp for consistency
+      // Get current timestamp for uniqueness
       DateTime now = DateTime.now();
       String dateString =
           '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+      String timeString =
+          '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
 
-      // Get count of today's attendance records
-      DateTime todayStart = DateTime(now.year, now.month, now.day);
-      DateTime todayEnd =
-          DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+      // Create unique ID with timestamp
+      String uniqueId = '$prefix$dateString$timeString';
 
-      try {
-        QuerySnapshot todaySnapshot = await FirebaseFirestore.instance
-            .collection('presensi')
-            .where('tanggal_waktu',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-            .where('tanggal_waktu',
-                isLessThanOrEqualTo: Timestamp.fromDate(todayEnd))
-            .get();
-
-        final int todayCount = todaySnapshot.docs.length + 1;
-        final String formattedNumber = todayCount.toString().padLeft(3, '0');
-
-        return '$prefix$dateString$formattedNumber';
-      } catch (e) {
-        log('Error getting today\'s count, using fallback: $e');
-        // Fallback: use timestamp
-        String timestamp = now.millisecondsSinceEpoch.toString();
-        return '$prefix$dateString${timestamp.substring(timestamp.length - 3)}';
-      }
+      log('Generated attendance ID: $uniqueId');
+      return uniqueId;
     } catch (e) {
       log('Error generating attendance ID: $e');
-      // Ultimate fallback
+      // Fallback with milliseconds
       String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      return 'idpr04${timestamp.substring(timestamp.length - 8)}';
+      return 'idpr04${timestamp.substring(timestamp.length - 10)}';
     }
   }
 
-  // Function to save attendance record - IMPROVED VERSION WITH DUPLICATE PREVENTION
-  Future<void> _saveAttendanceRecord(UserModel user) async {
+  // Function to check if attendance already exists today - SIMPLIFIED VERSION
+  Future<bool> _checkTodayAttendance(String nisn) async {
+    try {
+      DateTime now = DateTime.now();
+      DateTime startOfDay = DateTime(now.year, now.month, now.day, 0, 0, 0);
+      DateTime endOfDay =
+          DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+
+      log('Checking attendance for NISN: $nisn on ${now.toString().substring(0, 10)}');
+
+      QuerySnapshot existingRecords = await FirebaseFirestore.instance
+          .collection('presensi')
+          .where('nisn', isEqualTo: nisn)
+          .where('tanggal_waktu',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('tanggal_waktu',
+              isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+          .limit(1)
+          .get();
+
+      bool hasAttendance = existingRecords.docs.isNotEmpty;
+
+      if (hasAttendance) {
+        var existingData =
+            existingRecords.docs.first.data() as Map<String, dynamic>;
+        var existingTime =
+            (existingData['tanggal_waktu'] as Timestamp).toDate();
+        log('Found existing attendance for NISN $nisn at ${existingTime.toString()}');
+      } else {
+        log('No existing attendance found for NISN $nisn today');
+      }
+
+      return hasAttendance;
+    } catch (e) {
+      log('Error checking today attendance: $e');
+      // If error in checking, return false to allow attendance (fail safe)
+      return false;
+    }
+  }
+
+  // Function to save attendance record - RELIABLE VERSION
+  Future<bool> _saveAttendanceRecord(UserModel user) async {
     try {
       // Validate NISN
       if (user.nisn == null || user.nisn!.trim().isEmpty) {
-        log('Error: User NISN is null or empty');
-        showToast('Error: NISN tidak ditemukan');
-        return;
+        log('❌ Error: User NISN is null or empty');
+        showToast('Error: NISN tidak ditemukan', isError: true);
+        return false;
       }
 
       final String nisn = user.nisn!.trim();
-      log('Attempting to save attendance for NISN: $nisn');
+      log('🔄 Starting attendance save process for NISN: $nisn');
 
-      // Get current date without time (set to start of day)
-      DateTime now = DateTime.now();
-      DateTime todayStart = DateTime(now.year, now.month, now.day);
-      DateTime todayEnd =
-          DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
-
-      log('Checking attendance for date range: ${todayStart} to ${todayEnd}');
-
-      // Check if attendance already exists for this NISN today
-      try {
-        final QuerySnapshot existingRecords = await FirebaseFirestore.instance
-            .collection('presensi')
-            .where('nisn', isEqualTo: nisn)
-            .where('tanggal_waktu',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-            .where('tanggal_waktu',
-                isLessThanOrEqualTo: Timestamp.fromDate(todayEnd))
-            .limit(1)
-            .get();
-
-        if (existingRecords.docs.isNotEmpty) {
-          // Get the existing record details
-          var existingDoc = existingRecords.docs.first;
-          var existingData = existingDoc.data() as Map<String, dynamic>;
-          var existingTime =
-              (existingData['tanggal_waktu'] as Timestamp).toDate();
-
-          log('Attendance already exists for NISN $nisn on ${existingTime.toString()}');
-          showToast(
-              'Anda sudah melakukan presensi hari ini pada ${_formatTime(existingTime)}');
-          return;
-        }
-
-        log('No existing attendance found for NISN $nisn today. Proceeding to save new record.');
-      } catch (e) {
-        log('Error checking existing records: $e');
-        // If there's an error checking (e.g., collection doesn't exist),
-        // we'll continue to create the record
-        log('Proceeding with attendance creation despite check error');
+      // Check if already attended today
+      bool hasAttendedToday = await _checkTodayAttendance(nisn);
+      if (hasAttendedToday) {
+        log('⚠️ Attendance already exists for NISN $nisn today');
+        showToast('Anda sudah melakukan presensi hari ini!', isError: true);
+        return false;
       }
 
-      // Generate new attendance ID
+      // Generate attendance ID
       String attendanceId = await _generateAttendanceId();
-      log('Generated attendance ID: $attendanceId');
 
       // Prepare attendance data
       Map<String, dynamic> attendanceData = {
         'id_presensi': attendanceId,
         'nisn': nisn,
-        'nama': user.name ?? '', // Add name for easier identification
+        'nama': user.name ?? 'Unknown',
         'tanggal_waktu': Timestamp.now(),
         'status': 'hadir',
-        'created_at':
-            FieldValue.serverTimestamp(), // Server timestamp for consistency
-        'metode': 'face_recognition', // Add method for tracking
+        'metode': 'face_recognition',
+        'created_at': FieldValue.serverTimestamp(),
       };
 
-      log('Saving attendance data: $attendanceData');
+      log('📝 Saving attendance data: $attendanceData');
 
-      // Use transaction to ensure data consistency and prevent race conditions
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        // Double-check in transaction to prevent race conditions
-        final QuerySnapshot doubleCheck = await FirebaseFirestore.instance
-            .collection('presensi')
-            .where('nisn', isEqualTo: nisn)
-            .where('tanggal_waktu',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-            .where('tanggal_waktu',
-                isLessThanOrEqualTo: Timestamp.fromDate(todayEnd))
-            .limit(1)
-            .get();
+      // Save to Firestore with error handling
+      await FirebaseFirestore.instance
+          .collection('presensi')
+          .doc(attendanceId)
+          .set(attendanceData);
 
-        if (doubleCheck.docs.isNotEmpty) {
-          log('Race condition detected: Record already exists during transaction');
-          throw Exception('Attendance already recorded today');
-        }
+      log('✅ Attendance saved successfully with ID: $attendanceId');
 
-        // Create new attendance record
-        DocumentReference docRef =
-            FirebaseFirestore.instance.collection('presensi').doc(attendanceId);
+      // Verify the save by reading back
+      DocumentSnapshot savedDoc = await FirebaseFirestore.instance
+          .collection('presensi')
+          .doc(attendanceId)
+          .get();
 
-        transaction.set(docRef, attendanceData);
-      });
-
-      log('Attendance saved successfully with ID: $attendanceId');
-      showToast(
-          'Presensi berhasil dicatat pada ${_formatTime(DateTime.now())}!');
-    } catch (e) {
-      log('Error in _saveAttendanceRecord: $e');
-
-      if (e.toString().contains('Attendance already recorded today')) {
-        showToast('Anda sudah melakukan presensi hari ini');
-      } else {
+      if (savedDoc.exists) {
+        log('✅ Verified: Attendance record exists in Firestore');
         showToast(
-            'Terjadi kesalahan saat menyimpan presensi. Silahkan coba lagi.');
+            'Presensi berhasil dicatat pada ${_formatTime(DateTime.now())}!');
+        return true;
+      } else {
+        log('❌ Error: Failed to verify saved attendance record');
+        showToast('Gagal menyimpan presensi. Silakan coba lagi.',
+            isError: true);
+        return false;
       }
+    } catch (e) {
+      log('❌ Error in _saveAttendanceRecord: $e');
+      showToast('Terjadi kesalahan saat menyimpan presensi: ${e.toString()}',
+          isError: true);
+      return false;
     }
   }
 
@@ -199,16 +180,10 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
     return '${dateTime.day} ${months[dateTime.month - 1]} ${dateTime.year}';
   }
 
-  // Initialize Firestore collection if needed - SIMPLIFIED
-  Future<void> _initializeCollection() async {
-    // Firestore will create collection automatically on first save
-    log('Firestore will create collection automatically on first save');
-  }
-
   @override
   void initState() {
     super.initState();
-    _initializeCollection();
+    log('🚀 AuthenticateScreen initialized');
   }
 
   @override
@@ -426,14 +401,19 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
   }
 
   _fetchUsersAndMatchFace() {
+    log('🔍 Starting face matching process...');
+
     FirebaseFirestore.instance.collection("wajah_siswa").get().catchError((e) {
-      log("Getting User Error: $e");
+      log("❌ Getting User Error: $e");
       setState(() => isMatching = false);
-      showToast("Terjadi kesalahan!. Silahkan coba lagi");
+      showToast(
+          "Terjadi kesalahan saat mengambil data wajah!. Silahkan coba lagi",
+          isError: true);
     }).then((snap) {
       if (snap.docs.isNotEmpty) {
         users.clear();
-        log(snap.docs.length.toString(), name: "Total wajah terdaftar");
+        log('📊 Total wajah terdaftar: ${snap.docs.length}');
+
         for (var doc in snap.docs) {
           UserModel user = UserModel.fromJson(doc.data());
           double similarity = compareFaces(_faceFeatures!, user.faceFeatures!);
@@ -441,7 +421,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
             users.add([user, similarity]);
           }
         }
-        log(users.length.toString(), name: "Filtered Users");
+
+        log('✅ Filtered Users with matching similarity: ${users.length}');
+
         setState(() {
           //Sorts the users based on the similarity.
           //More similar face is put first.
@@ -460,6 +442,8 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
   }
 
   _matchFaces() async {
+    log('🔄 Starting face matching with ${users.length} candidates...');
+
     bool faceMatched = false;
     for (List user in users) {
       image1.bitmap = (user.first as UserModel).image;
@@ -480,12 +464,12 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
         _similarity = split!.matchedFaces.isNotEmpty
             ? (split.matchedFaces[0]!.similarity! * 100).toStringAsFixed(2)
             : "error";
-        log("similarity: $_similarity");
+        log("📊 Face similarity: $_similarity%");
 
         if (_similarity != "error" && double.parse(_similarity) > 90.00) {
           faceMatched = true;
           loggingUser = user.first;
-          log('Face matched for user: ${loggingUser?.name}, NISN: ${loggingUser?.nisn}');
+          log('✅ Face matched for user: ${loggingUser?.name}, NISN: ${loggingUser?.nisn}');
         } else {
           faceMatched = false;
         }
@@ -493,18 +477,32 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
 
       if (faceMatched) {
         // Save attendance record first
-        await _saveAttendanceRecord(loggingUser!);
+        log('💾 Attempting to save attendance record...');
+        bool attendanceSaved = await _saveAttendanceRecord(loggingUser!);
 
         setState(() {
           trialNumber = 1;
           isMatching = false;
         });
 
-        if (mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => AuthenticatedUserScreen(user: loggingUser!),
-            ),
+        if (attendanceSaved) {
+          log('✅ Attendance saved, navigating to success screen');
+          if (mounted) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => AuthenticatedUserScreen(
+                  user: loggingUser!,
+                  attendanceAlreadySaved: true, // Mark as already saved
+                ),
+              ),
+            );
+          }
+        } else {
+          log('❌ Failed to save attendance, showing error');
+          _showFailureDialog(
+            title: "Gagal Menyimpan Presensi",
+            description:
+                "Terjadi kesalahan saat menyimpan data presensi. Silakan coba lagi.",
           );
         }
         break;
@@ -571,7 +569,8 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                   TextButton(
                     onPressed: () {
                       if (_nameController.text.trim().isEmpty) {
-                        showToast("Masukkan nama untuk memproses");
+                        showToast("Masukkan nama untuk memproses",
+                            isError: true);
                       } else {
                         Navigator.of(context).pop();
                         setState(() => isMatching = true);
@@ -608,7 +607,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
         .catchError((e) {
       log("Getting User Error: $e");
       setState(() => isMatching = false);
-      showToast("Terjadi kesalahan!. Silahkan coba lagi.");
+      showToast("Terjadi kesalahan!. Silahkan coba lagi.", isError: true);
     }).then((snap) {
       if (snap.docs.isNotEmpty) {
         users.clear();
@@ -664,13 +663,13 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
     );
   }
 
-  void showToast(String msg) {
+  void showToast(String msg, {bool isError = false}) {
     Fluttertoast.showToast(
       msg: msg,
       toastLength: Toast.LENGTH_SHORT,
       gravity: ToastGravity.BOTTOM,
       timeInSecForIosWeb: 1,
-      backgroundColor: msg.contains('berhasil') ? Colors.green : Colors.red,
+      backgroundColor: isError ? Colors.red : Colors.green,
       textColor: Colors.white,
       fontSize: 14.0,
     );
