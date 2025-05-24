@@ -86,121 +86,23 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
     }
   }
 
-  // NEW: Function to identify user and check attendance status
-  Future<void> _identifyUserAndCheckAttendance() async {
-    if (_faceFeatures == null) return;
-
-    setState(() {
-      isIdentifying = true;
-      identificationResult = null;
-    });
-
-    try {
-      log('Starting user identification process...');
-
-      QuerySnapshot userSnapshot =
-          await FirebaseFirestore.instance.collection("wajah_siswa").get();
-
-      if (userSnapshot.docs.isEmpty) {
-        setState(() {
-          identificationResult = IdentificationResult(
-            success: false,
-            message: "Tidak ada wajah terdaftar di database",
-            user: null,
-            hasAttendedToday: false,
-          );
-          isIdentifying = false;
-        });
-        return;
-      }
-
-      List<List<dynamic>> matchedUsers = [];
-
-      for (var doc in userSnapshot.docs) {
-        UserModel user = UserModel.fromJson(doc.data() as Map<String, dynamic>);
-        if (user.faceFeatures != null) {
-          double similarity = compareFaces(_faceFeatures!, user.faceFeatures!);
-          if (similarity >= 0.8 && similarity <= 1.5) {
-            matchedUsers.add([user, similarity]);
-          }
-        }
-      }
-
-      log('Found ${matchedUsers.length} potential matches');
-
-      if (matchedUsers.isEmpty) {
-        setState(() {
-          identificationResult = IdentificationResult(
-            success: false,
-            message: "Wajah tidak dikenali",
-            user: null,
-            hasAttendedToday: false,
-          );
-          isIdentifying = false;
-        });
-        return;
-      }
-
-      // Sort by similarity (closest to 1.0 is best match)
-      matchedUsers.sort((a, b) => ((a.last as double) - 1)
-          .abs()
-          .compareTo(((b.last as double) - 1).abs()));
-
-      UserModel bestMatch = matchedUsers.first.first as UserModel;
-      log('Best match: ${bestMatch.name} (NISN: ${bestMatch.nisn})');
-
-      // Check if user has attended today
-      bool hasAttendedToday = false;
-      if (bestMatch.nisn != null) {
-        hasAttendedToday = await _checkTodayAttendance(bestMatch.nisn!);
-      }
-
-      setState(() {
-        identificationResult = IdentificationResult(
-          success: true,
-          message: hasAttendedToday
-              ? "Kamu sudah melakukan presensi hari ini"
-              : "Siap untuk melakukan presensi",
-          user: bestMatch,
-          hasAttendedToday: hasAttendedToday,
-        );
-        isIdentifying = false;
-      });
-
-      if (hasAttendedToday) {
-        showToast("Kamu sudah melakukan presensi hari ini!", isError: true);
-      }
-    } catch (e) {
-      log('Error in identification: $e');
-      setState(() {
-        identificationResult = IdentificationResult(
-          success: false,
-          message: "Terjadi kesalahan saat identifikasi",
-          user: null,
-          hasAttendedToday: false,
-        );
-        isIdentifying = false;
-      });
-    }
-  }
-
   // Function to save attendance record - RELIABLE VERSION
   Future<bool> _saveAttendanceRecord(UserModel user) async {
     try {
       // Validate NISN
       if (user.nisn == null || user.nisn!.trim().isEmpty) {
-        log('Error: User NISN is null or empty');
+        log('❌ Error: User NISN is null or empty');
         showToast('Error: NISN tidak ditemukan', isError: true);
         return false;
       }
 
       final String nisn = user.nisn!.trim();
-      log('Starting attendance save process for NISN: $nisn');
+      log('🔄 Starting attendance save process for NISN: $nisn');
 
       // Check if already attended today
       bool hasAttendedToday = await _checkTodayAttendance(nisn);
       if (hasAttendedToday) {
-        log('Attendance already exists for NISN $nisn today');
+        log('⚠️ Attendance already exists for NISN $nisn today');
         showToast('Anda sudah melakukan presensi hari ini!', isError: true);
         return false;
       }
@@ -219,7 +121,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
         'created_at': FieldValue.serverTimestamp(),
       };
 
-      log('Saving attendance data: $attendanceData');
+      log('📝 Saving attendance data: $attendanceData');
 
       // Save to Firestore with error handling
       await FirebaseFirestore.instance
@@ -227,7 +129,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
           .doc(attendanceId)
           .set(attendanceData);
 
-      log('Attendance saved successfully with ID: $attendanceId');
+      log('✅ Attendance saved successfully with ID: $attendanceId');
 
       // Verify the save by reading back
       DocumentSnapshot savedDoc = await FirebaseFirestore.instance
@@ -236,18 +138,18 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
           .get();
 
       if (savedDoc.exists) {
-        log('Verified: Attendance record exists in Firestore');
+        log('✅ Verified: Attendance record exists in Firestore');
         showToast(
             'Presensi berhasil dicatat pada ${_formatTime(DateTime.now())}!');
         return true;
       } else {
-        log('Error: Failed to verify saved attendance record');
+        log('❌ Error: Failed to verify saved attendance record');
         showToast('Gagal menyimpan presensi. Silakan coba lagi.',
             isError: true);
         return false;
       }
     } catch (e) {
-      log('Error in _saveAttendanceRecord: $e');
+      log('❌ Error in _saveAttendanceRecord: $e');
       showToast('Terjadi kesalahan saat menyimpan presensi: ${e.toString()}',
           isError: true);
       return false;
@@ -281,7 +183,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
   @override
   void initState() {
     super.initState();
-    log('AuthenticateScreen initialized');
+    log('🚀 AuthenticateScreen initialized');
   }
 
   @override
@@ -289,9 +191,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
-        title: const Text("Presensi Face Recognition"),
+        title: const Text("Presensi Wajah"),
         elevation: 0,
-        backgroundColor: Colors.green,
+        backgroundColor: Colors.blueAccent,
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
@@ -303,9 +205,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
               padding: const EdgeInsets.all(16.0),
               margin: const EdgeInsets.all(16.0),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
+                color: Colors.blue.shade50,
                 borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(color: Colors.green.shade200),
+                border: Border.all(color: Colors.blue.shade200),
               ),
               child: Column(
                 children: [
@@ -313,7 +215,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                     'Tanggal Hari Ini',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.green.shade700,
+                      color: Colors.blue.shade700,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -322,7 +224,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                     _formatDate(DateTime.now()),
                     style: TextStyle(
                       fontSize: 18,
-                      color: Colors.green.shade900,
+                      color: Colors.blue.shade900,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -340,88 +242,14 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                 _faceFeatures =
                     await extractFaceFeatures(inputImage, _faceDetector);
                 setState(() => isMatching = false);
-
-                // NEW: Automatically identify user after face is detected
-                if (_faceFeatures != null) {
-                  await _identifyUserAndCheckAttendance();
-                }
               },
             ),
 
             const SizedBox(height: 20),
 
-            // NEW: Identification Result Display
-            if (identificationResult != null)
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: identificationResult!.success
-                      ? (identificationResult!.hasAttendedToday
-                          ? Colors.orange.shade50
-                          : Colors.green.shade50)
-                      : Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: identificationResult!.success
-                        ? (identificationResult!.hasAttendedToday
-                            ? Colors.orange.shade300
-                            : Colors.green.shade300)
-                        : Colors.red.shade300,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Icon(
-                      identificationResult!.success
-                          ? (identificationResult!.hasAttendedToday
-                              ? Icons.warning_amber
-                              : Icons.check_circle)
-                          : Icons.error,
-                      color: identificationResult!.success
-                          ? (identificationResult!.hasAttendedToday
-                              ? Colors.orange.shade700
-                              : Colors.green.shade700)
-                          : Colors.red.shade700,
-                      size: 32,
-                    ),
-                    const SizedBox(height: 8),
-                    if (identificationResult!.user != null) ...[
-                      Text(
-                        'Halo, ${identificationResult!.user!.name}!',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: identificationResult!.success
-                              ? (identificationResult!.hasAttendedToday
-                                  ? Colors.orange.shade800
-                                  : Colors.green.shade800)
-                              : Colors.red.shade800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                    ],
-                    Text(
-                      identificationResult!.message,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: identificationResult!.success
-                            ? (identificationResult!.hasAttendedToday
-                                ? Colors.orange.shade700
-                                : Colors.green.shade700)
-                            : Colors.red.shade700,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-
-            const SizedBox(height: 20),
-
             // Status and Button
             if (_canAuthenticate)
-              isMatching || isIdentifying
+              isMatching
                   ? Container(
                       padding: const EdgeInsets.all(20),
                       child: Column(
@@ -432,9 +260,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            isMatching
-                                ? 'Sedang memproses wajah...'
-                                : 'Sedang mengidentifikasi...',
+                            'Sedang memproses wajah...',
                             style: TextStyle(
                               color: Colors.grey.shade600,
                               fontSize: 14,
@@ -448,10 +274,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              (identificationResult?.hasAttendedToday == true)
-                                  ? Colors.grey
-                                  : Colors.blueAccent,
+                          backgroundColor: Colors.blueAccent,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
@@ -459,22 +282,17 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                           ),
                           elevation: 2,
                         ),
-                        onPressed:
-                            (identificationResult?.hasAttendedToday == true)
-                                ? null
-                                : () {
-                                    setState(() => isMatching = true);
-                                    _fetchUsersAndMatchFace();
-                                  },
-                        child: Text(
-                          (identificationResult?.hasAttendedToday == true)
-                              ? "Sudah Presensi Hari Ini"
-                              : "Lakukan Presensi",
-                          style: const TextStyle(
+                        child: const Text(
+                          "Lakukan Presensi",
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                        onPressed: () {
+                          setState(() => isMatching = true);
+                          _fetchUsersAndMatchFace();
+                        },
                       ),
                     ),
 
@@ -511,8 +329,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
                       '1. Posisikan wajah Anda di tengah kamera\n'
                       '2. Pastikan pencahayaan cukup\n'
                       '3. Hindari menggunakan masker atau kacamata\n'
-                      '4. Sistem akan mengidentifikasi wajah secara otomatis\n'
-                      '5. Presensi hanya 1x pada hari yang sama',
+                      '4. Tekan tombol "Lakukan Presensi" setelah wajah terdeteksi',
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.orange.shade700,
@@ -584,17 +401,10 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
   }
 
   _fetchUsersAndMatchFace() {
-    log('Starting final face matching process...');
-
-    // NEW: If user already identified and has attended today, block the process
-    if (identificationResult?.hasAttendedToday == true) {
-      setState(() => isMatching = false);
-      showToast("Kamu sudah melakukan presensi hari ini!", isError: true);
-      return;
-    }
+    log('🔍 Starting face matching process...');
 
     FirebaseFirestore.instance.collection("wajah_siswa").get().catchError((e) {
-      log("Getting User Error: $e");
+      log("❌ Getting User Error: $e");
       setState(() => isMatching = false);
       showToast(
           "Terjadi kesalahan saat mengambil data wajah!. Silahkan coba lagi",
@@ -602,18 +412,17 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
     }).then((snap) {
       if (snap.docs.isNotEmpty) {
         users.clear();
-        log('Total wajah terdaftar: ${snap.docs.length}');
+        log('📊 Total wajah terdaftar: ${snap.docs.length}');
 
         for (var doc in snap.docs) {
-          UserModel user =
-              UserModel.fromJson(doc.data() as Map<String, dynamic>);
+          UserModel user = UserModel.fromJson(doc.data());
           double similarity = compareFaces(_faceFeatures!, user.faceFeatures!);
           if (similarity >= 0.8 && similarity <= 1.5) {
             users.add([user, similarity]);
           }
         }
 
-        log('Filtered Users with matching similarity: ${users.length}');
+        log('✅ Filtered Users with matching similarity: ${users.length}');
 
         setState(() {
           //Sorts the users based on the similarity.
@@ -633,7 +442,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
   }
 
   _matchFaces() async {
-    log('Starting face matching with ${users.length} candidates...');
+    log('🔄 Starting face matching with ${users.length} candidates...');
 
     bool faceMatched = false;
     for (List user in users) {
@@ -655,12 +464,12 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
         _similarity = split!.matchedFaces.isNotEmpty
             ? (split.matchedFaces[0]!.similarity! * 100).toStringAsFixed(2)
             : "error";
-        log("Face similarity: $_similarity%");
+        log("📊 Face similarity: $_similarity%");
 
         if (_similarity != "error" && double.parse(_similarity) > 90.00) {
           faceMatched = true;
           loggingUser = user.first;
-          log('Face matched for user: ${loggingUser?.name}, NISN: ${loggingUser?.nisn}');
+          log('✅ Face matched for user: ${loggingUser?.name}, NISN: ${loggingUser?.nisn}');
         } else {
           faceMatched = false;
         }
@@ -668,7 +477,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
 
       if (faceMatched) {
         // Save attendance record first
-        log('Attempting to save attendance record...');
+        log('💾 Attempting to save attendance record...');
         bool attendanceSaved = await _saveAttendanceRecord(loggingUser!);
 
         setState(() {
@@ -677,7 +486,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
         });
 
         if (attendanceSaved) {
-          log('Attendance saved, navigating to success screen');
+          log('✅ Attendance saved, navigating to success screen');
           if (mounted) {
             Navigator.of(context).push(
               MaterialPageRoute(
@@ -689,7 +498,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
             );
           }
         } else {
-          log('Failed to save attendance, showing error');
+          log('❌ Failed to save attendance, showing error');
           _showFailureDialog(
             title: "Gagal Menyimpan Presensi",
             description:
@@ -805,8 +614,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
 
         for (var doc in snap.docs) {
           setState(() {
-            users.add(
-                [UserModel.fromJson(doc.data() as Map<String, dynamic>), 1]);
+            users.add([UserModel.fromJson(doc.data()), 1]);
           });
         }
         _matchFaces();
@@ -886,9 +694,6 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
   bool userExists = false;
   UserModel? loggingUser;
   bool isMatching = false;
-  bool isIdentifying = false; // NEW: For identification process
-  IdentificationResult?
-      identificationResult; // NEW: For storing identification result
   int trialNumber = 1;
 
   @override
@@ -897,19 +702,4 @@ class _AuthenticateScreenState extends State<AuthenticateScreen> {
     _nameController.dispose();
     super.dispose();
   }
-}
-
-// NEW: Class for storing identification results
-class IdentificationResult {
-  final bool success;
-  final String message;
-  final UserModel? user;
-  final bool hasAttendedToday;
-
-  IdentificationResult({
-    required this.success,
-    required this.message,
-    required this.user,
-    required this.hasAttendedToday,
-  });
 }
