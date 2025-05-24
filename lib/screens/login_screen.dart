@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:smart_presensee/admin/admin_dashboard.dart';
 import 'package:smart_presensee/screens/dashboard_screen.dart';
-// import 'package:smart_presensee/screens/presensi_screen.dart';
-import 'package:smart_presensee/screens/signup_screen.dart'; // Import signup screen
+import 'package:smart_presensee/screens/signup_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
@@ -14,7 +14,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _nipController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
@@ -88,7 +88,8 @@ class _LoginPageState extends State<LoginPage> {
 
                                 // Email
                                 TextFormField(
-                                  controller: _nipController,
+                                  controller: _emailController,
+                                  keyboardType: TextInputType.emailAddress,
                                   decoration: InputDecoration(
                                     hintText: 'Email',
                                     filled: true,
@@ -103,6 +104,11 @@ class _LoginPageState extends State<LoginPage> {
                                   validator: (value) {
                                     if (value == null || value.trim().isEmpty) {
                                       return 'Email tidak boleh kosong';
+                                    }
+                                    if (!RegExp(
+                                            r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                                        .hasMatch(value.trim())) {
+                                      return 'Format email tidak valid';
                                     }
                                     return null;
                                   },
@@ -253,10 +259,10 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final String email = _nipController.text.trim();
+      final String email = _emailController.text.trim();
       final String password = _passwordController.text.trim();
 
-      // Update query to use 'pengguna' collection instead of 'users'
+      // Query user from 'pengguna' collection
       final QuerySnapshot userQuery = await FirebaseFirestore.instance
           .collection('pengguna')
           .where('email', isEqualTo: email)
@@ -270,19 +276,32 @@ class _LoginPageState extends State<LoginPage> {
 
       final userData = userQuery.docs.first.data() as Map<String, dynamic>;
       final String storedPassword = userData['password'] ?? '';
-      final String userName = userData['nama'] ??
-          userData['name'] ??
-          'User'; // Get user name from database
+      final String userName = userData['nama'] ?? userData['name'] ?? 'User';
+      final String userRole = userData['role'] ?? 'user';
 
       if (password == storedPassword) {
         _showSuccessToast('Login berhasil!');
+
         if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) =>
-                  DashboardPage(userName: userName), // Pass userName parameter
-            ),
-          );
+          // Navigate based on user role
+          if (userRole.toLowerCase() == 'admin') {
+            // Navigate to Admin Dashboard
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => AdminDashboard(
+                  adminName: userName,
+                  adminEmail: email,
+                ),
+              ),
+            );
+          } else {
+            // Navigate to regular user dashboard (walikelas, etc.)
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => DashboardPage(userName: userName),
+              ),
+            );
+          }
         }
       } else {
         _showErrorToast('Kata sandi salah');
@@ -344,7 +363,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
-    _nipController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
