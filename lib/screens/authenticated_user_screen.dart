@@ -33,10 +33,12 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
     // FIXED: Jangan save lagi jika sudah tersimpan
     if (widget.attendanceAlreadySaved) {
       _attendanceSaved = true;
-      log('✅ Attendance already saved in authenticate screen');
+      log('Attendance already saved in authenticate screen');
     } else {
-      log('⚠️ Attendance not saved yet, attempting backup save');
-      _saveAttendanceRecord();
+      log('Attendance not saved yet, attempting backup save');
+      // DISABLED: Remove backup save to prevent duplication
+      // _saveAttendanceRecord();
+      log('Backup save disabled to prevent duplication');
     }
   }
 
@@ -62,15 +64,18 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
     }
   }
 
-  Future<String> _generateAttendanceId() async {
-    const String prefix = 'idpr04';
-    final QuerySnapshot snapshot =
-        await FirebaseFirestore.instance.collection('presensi').get();
-    final int attendanceCount = snapshot.docs.length + 1;
-    return prefix + attendanceCount.toString().padLeft(4, '0');
+  Future<String> _generateAttendanceId(String nisn) async {
+    DateTime now = DateTime.now();
+    String dateString =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+
+    // Use NISN + date to ensure uniqueness per student per day
+    return 'idpr04_${dateString}_$nisn';
   }
 
   // BACKUP: Save attendance jika belum tersimpan di authenticate screen
+  // DISABLED to prevent duplication
+  // ignore: unused_element
   Future<void> _saveAttendanceRecord() async {
     if (widget.user.nisn == null || _attendanceSaved) return;
 
@@ -79,6 +84,8 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
     });
 
     try {
+      log('Starting backup save check for NISN: ${widget.user.nisn}');
+
       // Check if attendance record already exists for today
       DateTime now = DateTime.now();
       DateTime startOfDay = DateTime(now.year, now.month, now.day, 0, 0, 0);
@@ -94,36 +101,63 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
           .get();
 
       if (existingRecord.docs.isEmpty) {
-        // Generate new attendance ID
-        String attendanceId = await _generateAttendanceId();
-        log('📝 Backup save - Generated attendance ID: $attendanceId');
+        log('No existing attendance found, proceeding with backup save');
 
-        // Create new attendance record
-        await FirebaseFirestore.instance
-            .collection('presensi')
-            .doc(attendanceId)
-            .set({
-          'id_presensi': attendanceId,
-          'nisn': widget.user.nisn,
-          'tanggal_waktu': Timestamp.now(),
-          'status': 'hadir',
+        // Generate attendance ID with NISN + date for uniqueness
+        String attendanceId = await _generateAttendanceId(widget.user.nisn!);
+        log('Backup save - Generated attendance ID: $attendanceId');
+
+        // Use transaction for atomic operation
+        await FirebaseFirestore.instance.runTransaction((transaction) async {
+          // Double check within transaction
+          DocumentSnapshot existingDoc = await transaction.get(FirebaseFirestore
+              .instance
+              .collection('presensi')
+              .doc(attendanceId));
+
+          if (existingDoc.exists) {
+            log('Document already exists during backup save - aborting');
+            throw Exception('DOCUMENT_ALREADY_EXISTS');
+          }
+
+          // Create new attendance record
+          transaction.set(
+              FirebaseFirestore.instance
+                  .collection('presensi')
+                  .doc(attendanceId),
+              {
+                'id_presensi': attendanceId,
+                'nisn': widget.user.nisn,
+                'tanggal_waktu': Timestamp.now(),
+                'status': 'hadir',
+                'metode': 'face_recognition_backup',
+                'created_at': FieldValue.serverTimestamp(),
+              });
         });
 
         setState(() {
           _attendanceSaved = true;
         });
 
-        _showSuccessToast('Presensi berhasil dicatat!');
-        log('✅ Backup save - Attendance saved successfully');
+        _showSuccessToast('Presensi berhasil dicatat (backup)!');
+        log('Backup save - Attendance saved successfully');
       } else {
         setState(() {
           _attendanceSaved = true;
         });
-        log('ℹ️ Attendance already exists, not saving duplicate');
+        log('Attendance already exists, not saving duplicate');
       }
     } catch (e) {
-      log('❌ Error in backup save attendance: $e');
-      _showErrorToast('Terjadi kesalahan saat menyimpan data');
+      log('Error in backup save attendance: $e');
+
+      if (e.toString().contains('DOCUMENT_ALREADY_EXISTS')) {
+        setState(() {
+          _attendanceSaved = true;
+        });
+        log('Document already exists, treating as success');
+      } else {
+        _showErrorToast('Terjadi kesalahan saat menyimpan data');
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -225,9 +259,9 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
 
                     const SizedBox(height: 16),
 
-                    Text(
+                    const Text(
                       "Presensi Berhasil Dicatat",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 18,
                         color: Color(0xFF4CAF50),

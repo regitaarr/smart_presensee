@@ -23,7 +23,6 @@ class _CameraViewState extends State<CameraView> {
   @override
   void initState() {
     super.initState();
-
     _imagePicker = ImagePicker();
   }
 
@@ -34,36 +33,84 @@ class _CameraViewState extends State<CameraView> {
         Container(
           width: double.infinity,
           height: 300,
-          decoration: const BoxDecoration(
-            color: Colors.yellowAccent,
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey[300]!),
           ),
-          child: _image != null
-              ? Image.file(
-                  _image!,
-                  fit: BoxFit.cover,
-                )
-              : const Center(
-                  child: Icon(
-                    Icons.camera_alt,
-                    size: 32,
-                    color: Color(0xff2E2E2E),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: _image != null
+                ? Image.file(
+                    _image!,
+                    fit: BoxFit.cover,
+                  )
+                : Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.grey[50]!,
+                          Colors.grey[100]!,
+                        ],
+                      ),
+                    ),
+                    child: const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.camera_alt,
+                            size: 48,
+                            color: Color(0xFF4CAF50),
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            'Ambil Foto Wajah',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF4CAF50),
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Posisikan wajah di tengah kamera',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+          ),
         ),
-        const SizedBox(
-          height: 12,
-        ),
-        ElevatedButton(
-          onPressed: _getImage,
-          child: const Text(
-            "Klik disini untuk mengambil gambar",
-            style: TextStyle(
-              fontSize: 14,
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          height: 50,
+          child: ElevatedButton.icon(
+            onPressed: _getImage,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25),
+              ),
+              elevation: 2,
+            ),
+            icon: const Icon(Icons.camera_alt, size: 20),
+            label: Text(
+              _image != null ? "Ambil Foto Ulang" : "Ambil Foto Wajah",
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-        ),
-        const SizedBox(
-          height: 12,
         ),
       ],
     );

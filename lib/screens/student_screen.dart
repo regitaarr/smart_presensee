@@ -173,37 +173,37 @@ class _StudentScreenState extends State<StudentScreen> {
                         ),
                         const SizedBox(height: 30),
 
-                        // Photo Registration Button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const RegisterScreen(),
-                                ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFFC107),
-                              foregroundColor: Colors.black,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(25),
-                              ),
-                            ),
-                            icon: const Icon(Icons.camera_alt),
-                            label: const Text(
-                              'Daftarkan Foto Wajah',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
+                        // // Photo Registration Button
+                        // SizedBox(
+                        //   width: double.infinity,
+                        //   height: 50,
+                        //   child: ElevatedButton.icon(
+                        //     onPressed: () {
+                        //       Navigator.push(
+                        //         context,
+                        //         MaterialPageRoute(
+                        //           builder: (context) => const RegisterScreen(),
+                        //         ),
+                        //       );
+                        //     },
+                        //     style: ElevatedButton.styleFrom(
+                        //       backgroundColor: const Color(0xFFFFC107),
+                        //       foregroundColor: Colors.black,
+                        //       shape: RoundedRectangleBorder(
+                        //         borderRadius: BorderRadius.circular(25),
+                        //       ),
+                        //     ),
+                        //     icon: const Icon(Icons.camera_alt),
+                        //     label: const Text(
+                        //       'Daftarkan Foto Wajah',
+                        //       style: TextStyle(
+                        //         fontSize: 16,
+                        //         fontWeight: FontWeight.bold,
+                        //       ),
+                        //     ),
+                        //   ),
+                        // ),
+                        // const SizedBox(height: 20),
 
                         // Save Button
                         SizedBox(
@@ -238,6 +238,39 @@ class _StudentScreenState extends State<StudentScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(height: 20),
+
+                        // Photo Registration Button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const RegisterScreen(),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFFFC107),
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25),
+                              ),
+                            ),
+                            icon: const Icon(Icons.camera_alt),
+                            label: const Text(
+                              'Daftarkan Foto Wajah',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
                       ],
                     ),
                   ),
