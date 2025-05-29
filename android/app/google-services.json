@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1026089126045",
+    "project_id": "smart-presensee-app",
+    "storage_bucket": "smart-presensee-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1026089126045:android:060e91f22ffdd843fb2c74",
+        "android_client_info": {
+          "package_name": "com.matifdeveloper.face_detector"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBcucSiIJQmnRkBntvd0s-at8DuksZMcMc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
