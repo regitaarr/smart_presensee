@@ -144,40 +144,62 @@ class _DashboardScreenState extends State<DashboardPage>
       DateTime today = DateTime.now();
       log('Loading attendance statistics for: ${today.toIso8601String().substring(0, 10)}');
 
-      // Get all attendance records for today
-      QuerySnapshot attendanceSnapshot =
-          await FirebaseFirestore.instance.collection('presensi').get();
+      // Get all students first
+      QuerySnapshot studentSnapshot = await FirebaseFirestore.instance
+          .collection('siswa')
+          .orderBy('nama_siswa')
+          .get();
+
+      log('Found ${studentSnapshot.docs.length} students');
 
       Map<String, int> stats = {
         'hadir': 0,
         'sakit': 0,
         'izin': 0,
         'alpha': 0,
-        'total': 0,
+        'total':
+            0, // Will be updated with count of students with 'hadir' status
       };
 
-      // Filter records for today manually
-      for (var doc in attendanceSnapshot.docs) {
-        try {
-          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+      // Get all attendance records for today
+      QuerySnapshot attendanceSnapshot =
+          await FirebaseFirestore.instance.collection('presensi').get();
 
-          if (data['tanggal_waktu'] != null) {
-            DateTime recordDate = (data['tanggal_waktu'] as Timestamp).toDate();
+      log('Found ${attendanceSnapshot.docs.length} attendance records');
+
+      // Process each student
+      for (var studentDoc in studentSnapshot.docs) {
+        String nisn = studentDoc.id;
+        String status = 'alpha'; // Default status
+
+        // Check attendance records for this student
+        for (var attendanceDoc in attendanceSnapshot.docs) {
+          Map<String, dynamic> attendanceData =
+              attendanceDoc.data() as Map<String, dynamic>;
+
+          if (attendanceData['nisn'] == nisn &&
+              attendanceData['tanggal_waktu'] != null) {
+            DateTime recordDate =
+                (attendanceData['tanggal_waktu'] as Timestamp).toDate();
 
             // Check if record is for today
             if (_isSameDay(recordDate, today)) {
-              String status = data['status'] ?? 'alpha';
-              if (stats.containsKey(status)) {
-                stats[status] = stats[status]! + 1;
-                stats['total'] = stats['total']! + 1;
-              }
-
-              log('Found attendance: ${data['nisn']} - $status on ${recordDate.toIso8601String()}');
+              status = attendanceData['status'] ?? 'alpha';
+              break;
             }
           }
-        } catch (e) {
-          log('Error processing attendance record ${doc.id}: $e');
         }
+
+        // Update statistics
+        if (stats.containsKey(status)) {
+          stats[status] = stats[status]! + 1;
+          // Update total only for students with 'hadir' status
+          if (status == 'hadir') {
+            stats['total'] = stats['total']! + 1;
+          }
+        }
+
+        log('Student $nisn status: $status');
       }
 
       setState(() {

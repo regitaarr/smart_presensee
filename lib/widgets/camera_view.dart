@@ -72,9 +72,9 @@ class _CameraViewState extends State<CameraView> with TickerProviderStateMixin {
         final availableWidth = constraints.maxWidth;
 
         // Camera height should be responsive to available space
-        final cameraHeight = (availableHeight * 0.75).clamp(200.0, 300.0);
-        final buttonHeight = 50.0;
-        final spacing = 16.0;
+        final cameraHeight = (availableHeight * 0.7).clamp(180.0, 280.0);
+        final buttonHeight = 45.0;
+        final spacing = 8.0;
 
         return FadeTransition(
           opacity: _fadeAnimation,
@@ -151,8 +151,8 @@ class _CameraViewState extends State<CameraView> with TickerProviderStateMixin {
         Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: height - 40, // Leave some padding
-              maxWidth: width - 40,
+              maxHeight: height - 32,
+              maxWidth: width - 32,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -162,31 +162,31 @@ class _CameraViewState extends State<CameraView> with TickerProviderStateMixin {
                 const Text(
                   'Ambil Foto Wajah',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF2E7D32),
                   ),
                 ),
 
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
 
                 // Subtitle
                 const Text(
                   'Posisikan wajah di tengah',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: Color(0xFF6B7280),
                     fontWeight: FontWeight.w500,
                   ),
                   textAlign: TextAlign.center,
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
 
                 // Face outline guide
                 Container(
-                  width: (width * 0.3).clamp(60.0, 100.0),
-                  height: (width * 0.35).clamp(70.0, 120.0),
+                  width: (width * 0.25).clamp(50.0, 90.0),
+                  height: (width * 0.3).clamp(60.0, 100.0),
                   decoration: BoxDecoration(
                     border: Border.all(
                       color: const Color(0xFF81C784).withOpacity(0.5),

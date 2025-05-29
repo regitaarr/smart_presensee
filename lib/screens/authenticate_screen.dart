@@ -261,8 +261,8 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFFE8F5E8), // Light pastel green
-              Color(0xFFFFF3E0), // Light pastel orange
+              Color(0xFFE8F5E8),
+              Color(0xFFFFF3E0),
             ],
           ),
         ),
@@ -273,40 +273,42 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
               FadeTransition(
                 opacity: _fadeAnimation,
                 child: Container(
-                  padding: const EdgeInsets.all(24),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     children: [
                       GestureDetector(
                         onTap: () => Navigator.of(context).pop(),
                         child: Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
                           child: const Icon(
                             Icons.arrow_back,
                             color: Color(0xFF2E7D32),
-                            size: 24,
+                            size: 18,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 8),
                       const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               'Presensi Wajah',
                               style: TextStyle(
-                                fontSize: 20,
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF2E7D32),
                               ),
@@ -314,7 +316,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                             Text(
                               'Scan wajah untuk presensi',
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 12,
                                 color: Color(0xFF6B7280),
                               ),
                             ),
@@ -325,100 +327,102 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                   ),
                 ),
               ),
-
-              // Date Display
-              ScaleTransition(
-                scale: _scaleAnimation,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 24),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF81C784),
-                        Color(0xFF66BB6A),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF81C784).withOpacity(0.3),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.calendar_today,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Tanggal Hari Ini',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Text(
-                              _formatDate(DateTime.now()),
-                              style: const TextStyle(
-                                fontSize: 18,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Main Content
+              // Konten utama scrollable
               Expanded(
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 30,
-                          offset: const Offset(0, 15),
-                        ),
-                      ],
-                    ),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        return Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    children: [
+                      // Date Display
+                      ScaleTransition(
+                        scale: _scaleAnimation,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFF81C784),
+                                Color(0xFF66BB6A),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF81C784).withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: Row(
                             children: [
-                              // Camera View - Takes most of the space
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.calendar_today,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
                               Expanded(
-                                child: CameraView(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      'Tanggal Hari Ini',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    Text(
+                                      _formatDate(DateTime.now()),
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Main Content
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Column(
+                              children: [
+                                // Camera View
+                                CameraView(
                                   onImage: (image) {
                                     _setImage(image);
                                   },
@@ -429,28 +433,25 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                                     setState(() => isMatching = false);
                                   },
                                 ),
-                              ),
-
-                              const SizedBox(
-                                  height: 8), // Dikurangi dari 12 ke 8
-
-                              // Status and Button Section - Fixed height
-                              SizedBox(
-                                height: _canAuthenticate
-                                    ? 80
-                                    : 100, // Dikurangi dari 120 ke 100
-                                child: _buildActionSection(constraints),
-                              ),
-                            ],
+                                const SizedBox(height: 4),
+                                // Status and Button Section
+                                _buildActionSection(),
+                              ],
+                            ),
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // Petunjuk Presensi
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: _buildPetunjukPresensi(),
+                      ),
+                    ],
                   ),
                 ),
               ),
-
-              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -791,11 +792,11 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     );
   }
 
-  Widget _buildActionSection(BoxConstraints constraints) {
+  Widget _buildActionSection() {
     if (_canAuthenticate) {
       return isMatching
           ? Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(12),
@@ -804,16 +805,16 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
               child: Row(
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: 24,
+                    height: 24,
                     decoration: BoxDecoration(
                       color: const Color(0xFF81C784).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Center(
                       child: SizedBox(
-                        width: 16,
-                        height: 16,
+                        width: 12,
+                        height: 12,
                         child: CircularProgressIndicator(
                           valueColor:
                               AlwaysStoppedAnimation<Color>(Color(0xFF81C784)),
@@ -822,7 +823,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   const Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -831,16 +832,16 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                         Text(
                           'Memproses wajah...',
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF374151),
                           ),
                         ),
-                        SizedBox(height: 2),
+                        SizedBox(height: 1),
                         Text(
                           'Harap tunggu sebentar',
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             color: Color(0xFF6B7280),
                           ),
                         ),
@@ -852,7 +853,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
             )
           : Container(
               width: double.infinity,
-              height: 10,
+              height: 40,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 gradient: const LinearGradient(
@@ -888,13 +889,13 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                     Icon(
                       Icons.face_retouching_natural,
                       color: Colors.white,
-                      size: 18,
+                      size: 16,
                     ),
-                    SizedBox(width: 8),
+                    SizedBox(width: 6),
                     Text(
                       "Lakukan Presensi",
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                         letterSpacing: 0.5,
@@ -905,61 +906,64 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
               ),
             );
     } else {
-      return Container(
-        padding: const EdgeInsets.all(8), // Dikurangi dari 10 ke 8
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF3E0),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFFFCC80)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(2), // Dikurangi dari 5 ke 4
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF8A65).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(
-                    Icons.info_outline,
-                    color: Color(0xFFFF7043),
-                    size: 14,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Petunjuk Presensi',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFFF7043),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2), // Dikurangi dari 6 ke 4
-            const Text(
-              '1. Posisikan wajah di tengah kamera\n'
-              '2. Pastikan pencahayaan cukup\n'
-              '3. Hindari menggunakan masker\n'
-              '4. Tekan tombol setelah wajah terdeteksi',
-              style: TextStyle(
-                fontSize: 15,
-                color: Color(0xFF6B7280),
-                height:
-                    1.1, // Dikurangi dari 1.2 ke 1.1 untuk mengurangi jarak antar baris
-              ),
-              textAlign: TextAlign.left,
-            ),
-          ],
-        ),
-      );
+      return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildPetunjukPresensi() {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFFCC80)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF8A65).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.info_outline,
+                  color: Color(0xFFFF7043),
+                  size: 12,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'Petunjuk Presensi',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFFF7043),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            '1. Posisikan wajah di tengah kamera\n'
+            '2. Pastikan pencahayaan cukup\n'
+            '3. Hindari menggunakan masker\n'
+            '4. Tekan tombol setelah wajah terdeteksi',
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFF6B7280),
+              height: 1.1,
+            ),
+            textAlign: TextAlign.left,
+          ),
+        ],
+      ),
+    );
   }
 
   void showToast(String msg, {bool isError = false}) {
