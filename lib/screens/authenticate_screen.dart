@@ -295,7 +295,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                           child: const Icon(
                             Icons.arrow_back,
                             color: Color(0xFF2E7D32),
-                            size: 18,
+                            size: 22,
                           ),
                         ),
                       ),
@@ -308,7 +308,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                             Text(
                               'Presensi Wajah',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF2E7D32),
                               ),
@@ -316,7 +316,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                             Text(
                               'Scan wajah untuk presensi',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 16,
                                 color: Color(0xFF6B7280),
                               ),
                             ),
@@ -380,7 +380,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                                     const Text(
                                       'Tanggal Hari Ini',
                                       style: TextStyle(
-                                        fontSize: 11,
+                                        fontSize: 16,
                                         color: Colors.white,
                                         fontWeight: FontWeight.w500,
                                       ),
@@ -388,7 +388,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                                     Text(
                                       _formatDate(DateTime.now()),
                                       style: const TextStyle(
-                                        fontSize: 13,
+                                        fontSize: 18,
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -832,7 +832,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                         Text(
                           'Memproses wajah...',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF374151),
                           ),
@@ -841,7 +841,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                         Text(
                           'Harap tunggu sebentar',
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 15,
                             color: Color(0xFF6B7280),
                           ),
                         ),
@@ -895,7 +895,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                     Text(
                       "Lakukan Presensi",
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 18,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                         letterSpacing: 0.5,
@@ -921,41 +921,28 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF8A65).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(
-                  Icons.info_outline,
-                  color: Color(0xFFFF7043),
-                  size: 12,
-                ),
+          // Judul di tengah
+          Align(
+            alignment: Alignment.center,
+            child: Text(
+              'Petunjuk Presensi',
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFFF7043),
               ),
-              const SizedBox(width: 6),
-              const Expanded(
-                child: Text(
-                  'Petunjuk Presensi',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFFF7043),
-                  ),
-                ),
-              ),
-            ],
+              textAlign: TextAlign.center,
+            ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 8),
+          // List tetap rata kiri
           const Text(
             '1. Posisikan wajah di tengah kamera\n'
             '2. Pastikan pencahayaan cukup\n'
             '3. Hindari menggunakan masker\n'
             '4. Tekan tombol setelah wajah terdeteksi',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 16,
               color: Color(0xFF6B7280),
               height: 1.1,
             ),

@@ -444,7 +444,7 @@ class _DashboardScreenState extends State<DashboardPage>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Total Presensi Hari Ini',
+                        'Total presensi hari ini:',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
