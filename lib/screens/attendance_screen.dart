@@ -150,7 +150,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           tempList.add(StudentAttendanceModel(
             nisn: nisn,
             nama: studentData['nama_siswa'] ?? 'Nama tidak tersedia',
-            kelas: studentData['kelas'] ?? 'Tidak diketahui',
+            kelas: studentData['kelas_sw'] ?? 'Tidak diketahui',
             jenisKelamin: studentData['jenis_kelamin'] ?? 'Tidak diketahui',
             hasFaceRegistered: hasFaceRegistered,
             todayAttendanceStatus: todayStatus,

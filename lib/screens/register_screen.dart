@@ -234,8 +234,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       setState(() {
                                         selectedStudentName =
                                             studentData['nama_siswa'];
-                                        selectedStudentClass =
-                                            studentData['kelas'];
+                                        selectedStudentClass = studentData[
+                                            'kelas_sw']; // PERBAIKAN: gunakan 'kelas_sw'
                                       });
                                     } else {
                                       setState(() {

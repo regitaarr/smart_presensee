@@ -675,7 +675,7 @@ class _StudentScreenState extends State<StudentScreen>
         'nisn': nisn,
         'nama_siswa': nama,
         'jenis_kelamin': _selectedGender,
-        'kelas': _selectedClass,
+        'kelas_sw': _selectedClass,
         'tanggal_daftar': Timestamp.now(),
       });
 

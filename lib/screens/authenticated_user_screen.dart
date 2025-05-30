@@ -55,7 +55,7 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
               studentDoc.data() as Map<String, dynamic>;
           setState(() {
             studentName = studentData['nama_siswa'] ?? widget.user.name;
-            studentClass = studentData['kelas'] ?? 'Tidak diketahui';
+            studentClass = studentData['kelas_sw'] ?? 'Tidak diketahui';
           });
         }
       } catch (e) {
