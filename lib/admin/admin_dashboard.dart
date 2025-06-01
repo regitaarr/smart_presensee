@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smart_presensee/screens/login_screen.dart';
-import 'package:smart_presensee/screens/student_screen.dart';
-import 'package:smart_presensee/screens/attendance_screen.dart';
-import 'package:smart_presensee/screens/register_screen.dart';
 import 'package:smart_presensee/admin/admin_schedule.dart';
+import 'package:smart_presensee/admin/admin_student_list.dart';
+import 'package:smart_presensee/admin/admin_attendance_list.dart';
+import 'package:smart_presensee/admin/admin_face_list.dart';
+import 'package:smart_presensee/admin/admin_user_list.dart';
+import 'package:smart_presensee/admin/admin_profile_screen.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'dart:developer';
 
@@ -96,25 +98,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF4CAF50),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF4CAF50),
-        elevation: 0,
-        title: const Text(
-          'Beranda Admin',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            onPressed: () => _showLogoutDialog(),
-            icon: const Icon(Icons.logout, color: Colors.white),
-            tooltip: 'Logout',
-          ),
-        ],
-      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -159,6 +142,42 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ],
                     ),
                   ),
+                  // Ikon profil admin di kanan header
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AdminProfileScreen(
+                            adminEmail: widget.adminEmail,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF81C784), Color(0xFF66BB6A)],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -179,12 +198,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Statistics Cards
-                      const Text(
-                        'Statistik Hari Ini',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                      const Center(
+                        child: Text(
+                          'Statistik Hari Ini',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -235,12 +257,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       const SizedBox(height: 30),
 
                       // Quick Actions
-                      const Text(
-                        'Aksi Cepat',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                      const Center(
+                        child: Text(
+                          'Aksi Cepat',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -254,28 +279,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         childAspectRatio: 1.2,
                         children: [
                           _buildActionCard(
-                            'Kelola Siswa',
-                            'Tambah & kelola data siswa',
+                            'Data Siswa',
+                            'Lihat data siswa',
                             Icons.people_outline,
                             const Color(0xFF2196F3),
                             () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const StudentScreen(),
+                                builder: (context) => const AdminStudentList(),
                               ),
-                            ).then((_) => _loadStatistics()),
+                            ),
                           ),
                           _buildActionCard(
-                            'Daftar Wajah',
-                            'Registrasi wajah siswa',
+                            'Data Wajah',
+                            'Lihat data wajah terdaftar',
                             Icons.face_retouching_natural,
                             const Color(0xFF9C27B0),
                             () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const RegisterScreen(),
+                                builder: (context) => const AdminFaceList(),
                               ),
-                            ).then((_) => _loadStatistics()),
+                            ),
                           ),
                           _buildActionCard(
                             'Data Presensi',
@@ -285,7 +310,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const AttendanceScreen(),
+                                builder: (context) =>
+                                    const AdminAttendanceList(),
                               ),
                             ),
                           ),
@@ -303,111 +329,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             ),
                           ),
                           _buildActionCard(
-                            'Laporan',
-                            'Generate laporan presensi',
-                            Icons.assessment,
-                            const Color(0xFFFF9800),
-                            () => _showComingSoonDialog('Laporan'),
+                            'Daftar Pengguna',
+                            'Lihat semua pengguna',
+                            Icons.supervised_user_circle,
+                            const Color(0xFF607D8B),
+                            () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const AdminUserList(),
+                              ),
+                            ),
                           ),
                         ],
                       ),
 
                       const SizedBox(height: 30),
-
-                      // Recent Activity
-                      const Text(
-                        'Aktivitas Terbaru',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[50],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey[200]!),
-                        ),
-                        child: Column(
-                          children: [
-                            _buildActivityItem(
-                              Icons.person_add,
-                              'Siswa baru terdaftar',
-                              'Total $totalStudents siswa aktif',
-                              Colors.blue,
-                            ),
-                            const Divider(),
-                            _buildActivityItem(
-                              Icons.face,
-                              'Wajah terdaftar',
-                              '$totalFaceRegistered dari $totalStudents siswa',
-                              Colors.purple,
-                            ),
-                            const Divider(),
-                            _buildActivityItem(
-                              Icons.check_circle,
-                              'Presensi hari ini',
-                              '$todayPresent siswa hadir',
-                              Colors.green,
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _selectedIndex,
-          onTap: (index) {
-            setState(() {
-              _selectedIndex = index;
-            });
-            _handleBottomNavigation(index);
-          },
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: const Color(0xFF4CAF50),
-          unselectedItemColor: Colors.grey,
-          backgroundColor: Colors.white,
-          elevation: 0,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard),
-              label: 'Beranda',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.people),
-              label: 'Siswa',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.assignment),
-              label: 'Presensi',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.schedule),
-              label: 'Jadwal',
             ),
           ],
         ),
@@ -502,66 +442,24 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildActivityItem(
-      IconData icon, String title, String subtitle, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _handleBottomNavigation(int index) {
     switch (index) {
       case 0:
-        // Already on dashboard
+        // Already on home
         break;
       case 1:
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const StudentScreen(),
+            builder: (context) => const AdminStudentList(),
           ),
-        ).then((_) => _loadStatistics());
+        );
         break;
       case 2:
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const AttendanceScreen(),
+            builder: (context) => const AdminAttendanceList(),
           ),
         );
         break;
@@ -574,28 +472,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
         );
         break;
     }
-  }
-
-  void _showComingSoonDialog(String feature) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('$feature - Coming Soon'),
-          content:
-              Text('Fitur $feature akan segera hadir dalam update berikutnya.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'OK',
-                style: TextStyle(color: Color(0xFF4CAF50)),
-              ),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   void _showLogoutDialog() {

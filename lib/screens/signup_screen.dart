@@ -602,7 +602,6 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         'email': email,
         'password': password,
         'role': role,
-        'tanggal_daftar': Timestamp.now(),
       });
 
       _showSuccessToast('Pendaftaran berhasil!');

@@ -4,7 +4,12 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:smart_presensee/screens/register_screen.dart';
 
 class StudentScreen extends StatefulWidget {
-  const StudentScreen({super.key});
+  final String userEmail;
+
+  const StudentScreen({
+    super.key,
+    required this.userEmail,
+  });
 
   @override
   State<StudentScreen> createState() => _StudentScreenState();
@@ -19,6 +24,7 @@ class _StudentScreenState extends State<StudentScreen>
   String? _selectedGender;
   String? _selectedClass;
   bool _isLoading = false;
+  String? _walikelasNip;
 
   late AnimationController _fadeController;
   late AnimationController _slideController;
@@ -52,6 +58,7 @@ class _StudentScreenState extends State<StudentScreen>
   @override
   void initState() {
     super.initState();
+    _loadWalikelasData();
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 1200),
       vsync: this,
@@ -647,8 +654,52 @@ class _StudentScreenState extends State<StudentScreen>
     );
   }
 
+  Future<void> _loadWalikelasData() async {
+    try {
+      // First get the user ID from pengguna collection
+      QuerySnapshot userQuery = await FirebaseFirestore.instance
+          .collection('pengguna')
+          .where('email', isEqualTo: widget.userEmail)
+          .limit(1)
+          .get();
+
+      if (userQuery.docs.isEmpty) {
+        _showErrorToast('Data pengguna tidak ditemukan');
+        return;
+      }
+
+      String userId = userQuery.docs.first.id;
+
+      // Then get the wali kelas data
+      QuerySnapshot walikelasQuery = await FirebaseFirestore.instance
+          .collection('walikelas')
+          .where('id_pengguna', isEqualTo: userId)
+          .limit(1)
+          .get();
+
+      if (walikelasQuery.docs.isEmpty) {
+        _showErrorToast('Data wali kelas tidak ditemukan');
+        return;
+      }
+
+      Map<String, dynamic> walikelasData =
+          walikelasQuery.docs.first.data() as Map<String, dynamic>;
+
+      setState(() {
+        _walikelasNip = walikelasData['nip'];
+      });
+    } catch (e) {
+      _showErrorToast('Gagal memuat data wali kelas: ${e.toString()}');
+    }
+  }
+
   Future<void> _saveStudentData() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_walikelasNip == null) {
+      _showErrorToast('Data wali kelas tidak ditemukan');
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -670,12 +721,13 @@ class _StudentScreenState extends State<StudentScreen>
         return;
       }
 
-      // Save student data
+      // Save student data with wali kelas NIP
       await FirebaseFirestore.instance.collection('siswa').doc(nisn).set({
         'nisn': nisn,
         'nama_siswa': nama,
         'jenis_kelamin': _selectedGender,
         'kelas_sw': _selectedClass,
+        'nip': _walikelasNip, // Add the wali kelas NIP
         'tanggal_daftar': Timestamp.now(),
       });
 

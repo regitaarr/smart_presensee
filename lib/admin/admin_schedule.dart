@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'dart:developer';
+import 'package:flutter/services.dart';
 
 class AdminScheduleScreen extends StatefulWidget {
   const AdminScheduleScreen({super.key});
@@ -18,6 +19,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
   String searchQuery = '';
   String? selectedDayFilter;
   String? selectedClassFilter;
+  Map<String, String> classTeachers = {}; // Store class teacher NIPs
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -58,6 +60,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
   void initState() {
     super.initState();
     _loadScheduleData();
+    _loadClassTeachers();
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -202,6 +205,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
             jamSelesai: jamSelesai,
             mataPelajaran: mataPelajaran,
             kelas: kelas,
+            nip: scheduleData['nip'],
           ));
 
           log('✅ Berhasil memproses jadwal: $scheduleId');
@@ -245,6 +249,29 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
         errorMessage = 'Error: ${e.toString()}';
       });
       _showToast('Gagal memuat data jadwal: ${e.toString()}');
+    }
+  }
+
+  Future<void> _loadClassTeachers() async {
+    try {
+      QuerySnapshot teachersSnapshot =
+          await FirebaseFirestore.instance.collection('wali_kelas').get();
+
+      Map<String, String> tempTeachers = {};
+      for (var doc in teachersSnapshot.docs) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        String kelas = data['kelas']?.toString().toLowerCase() ?? '';
+        String nip = data['nip']?.toString() ?? '';
+        if (kelas.isNotEmpty && nip.isNotEmpty) {
+          tempTeachers[kelas] = nip;
+        }
+      }
+
+      setState(() {
+        classTeachers = tempTeachers;
+      });
+    } catch (e) {
+      log('Error loading class teachers: $e');
     }
   }
 
@@ -334,8 +361,11 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
         schedule?.jamMulai ?? const TimeOfDay(hour: 8, minute: 0);
     TimeOfDay selectedJamSelesai =
         schedule?.jamSelesai ?? const TimeOfDay(hour: 9, minute: 0);
+
     final TextEditingController mataPelajaranController =
         TextEditingController(text: schedule?.mataPelajaran ?? '');
+    final TextEditingController nipController =
+        TextEditingController(text: schedule?.nip ?? '');
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -360,6 +390,23 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                     ),
                     const SizedBox(height: 16),
 
+                    // NIP Input
+                    TextFormField(
+                      controller: nipController,
+                      maxLength: 18,
+                      decoration: const InputDecoration(
+                        labelText: 'NIP Wali Kelas',
+                        border: OutlineInputBorder(),
+                        hintText: 'Masukkan NIP wali kelas (18 karakter)',
+                        counterText: '',
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
                     // Kelas dropdown
                     DropdownButtonFormField<String>(
                       value: selectedKelas,
@@ -379,6 +426,46 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                         });
                       },
                     ),
+                    const SizedBox(height: 16),
+
+                    // Display Wali Kelas NIP if available
+                    if (classTeachers[selectedKelas] != null)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.person,
+                                size: 20, color: Colors.grey),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Wali Kelas',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  Text(
+                                    'NIP: ${classTeachers[selectedKelas]}',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     const SizedBox(height: 16),
 
                     // Hari dropdown
@@ -501,15 +588,19 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
                   child: const Text('Batal'),
                 ),
                 if (schedule != null)
                   TextButton(
-                    onPressed: () => Navigator.of(context).pop({
-                      'action': 'delete',
-                      'schedule': schedule,
-                    }),
+                    onPressed: () {
+                      Navigator.of(context).pop({
+                        'action': 'delete',
+                        'schedule': schedule,
+                      });
+                    },
                     style: TextButton.styleFrom(foregroundColor: Colors.red),
                     child: const Text('Hapus'),
                   ),
@@ -522,6 +613,16 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
 
                     if (mataPelajaranController.text.trim().length > 50) {
                       _showToast('Mata pelajaran maksimal 50 karakter');
+                      return;
+                    }
+
+                    if (nipController.text.trim().isEmpty) {
+                      _showToast('NIP guru tidak boleh kosong');
+                      return;
+                    }
+
+                    if (nipController.text.trim().length != 18) {
+                      _showToast('NIP guru harus 18 karakter');
                       return;
                     }
 
@@ -544,6 +645,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                       'hari': selectedHari,
                       'jam_mulai': selectedJamMulai,
                       'jam_selesai': selectedJamSelesai,
+                      'nip': nipController.text.trim(),
                       'schedule': schedule,
                     });
                   },
@@ -562,9 +664,6 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
     if (result != null) {
       await _handleScheduleAction(result);
     }
-
-    // Dispose controllers
-    mataPelajaranController.dispose();
   }
 
   Future<void> _handleScheduleAction(Map<String, dynamic> data) async {
@@ -611,9 +710,10 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
       'hari': data['hari'],
       'jam_mulai': _timeOfDayToTimestamp(data['jam_mulai']),
       'jam_selesai': _timeOfDayToTimestamp(data['jam_selesai']),
+      'nip': data['nip'],
     });
 
-    log('Created schedule: $scheduleId');
+    log('Created schedule: $scheduleId with NIP: ${data['nip']}');
   }
 
   Future<void> _updateSchedule(
@@ -627,9 +727,10 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
       'hari': data['hari'],
       'jam_mulai': _timeOfDayToTimestamp(data['jam_mulai']),
       'jam_selesai': _timeOfDayToTimestamp(data['jam_selesai']),
+      'nip': data['nip'],
     });
 
-    log('Updated schedule: ${schedule.id}');
+    log('Updated schedule: ${schedule.id} with NIP: ${data['nip']}');
   }
 
   Future<void> _deleteSchedule(ScheduleModel schedule) async {
@@ -1200,6 +1301,19 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                             color: Color(0xFF4CAF50),
                           ),
                         ),
+                        if (schedule.nip != null) ...[
+                          const SizedBox(width: 16),
+                          const Icon(Icons.person,
+                              size: 16, color: Color(0xFF4CAF50)),
+                          const SizedBox(width: 4),
+                          Text(
+                            'NIP: ${schedule.nip}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF4CAF50),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -1234,6 +1348,7 @@ class ScheduleModel {
   final TimeOfDay jamSelesai;
   final String mataPelajaran;
   final String kelas;
+  final String? nip; // Add NIP field
 
   ScheduleModel({
     required this.id,
@@ -1242,5 +1357,6 @@ class ScheduleModel {
     required this.jamSelesai,
     required this.mataPelajaran,
     required this.kelas,
+    this.nip,
   });
 }

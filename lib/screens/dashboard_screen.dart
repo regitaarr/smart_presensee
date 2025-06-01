@@ -1165,7 +1165,8 @@ class _DashboardScreenState extends State<DashboardPage>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const AttendanceScreen(),
+                    builder: (context) =>
+                        AttendanceScreen(userEmail: widget.userEmail),
                   ),
                 ).then((_) {
                   setState(() {

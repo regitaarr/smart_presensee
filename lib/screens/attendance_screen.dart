@@ -7,7 +7,12 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:smart_presensee/screens/student_screen.dart';
 
 class AttendanceScreen extends StatefulWidget {
-  const AttendanceScreen({super.key});
+  final String userEmail;
+
+  const AttendanceScreen({
+    super.key,
+    required this.userEmail,
+  });
 
   @override
   State<AttendanceScreen> createState() => _AttendanceScreenState();
@@ -580,7 +585,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const StudentScreen()),
+                MaterialPageRoute(
+                  builder: (context) =>
+                      StudentScreen(userEmail: widget.userEmail),
+                ),
               ).then((_) => _loadStudentData());
             },
             icon: const Icon(Icons.person_add, color: Colors.white),
@@ -900,10 +908,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const StudentScreen()))
-                    .then((_) => _loadStudentData());
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        StudentScreen(userEmail: widget.userEmail),
+                  ),
+                ).then((_) => _loadStudentData());
               },
               icon: const Icon(Icons.person_add),
               label: const Text('Tambah Siswa'),

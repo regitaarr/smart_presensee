@@ -542,13 +542,6 @@ class _ProfileScreenState extends State<ProfileScreen>
             value: walkelasData?['kelasku'] ?? 'Belum diisi',
             color: const Color(0xFFFF8A65),
           ),
-          const SizedBox(height: 16),
-          _buildModernInfoCard(
-            icon: Icons.calendar_today_outlined,
-            label: 'Tanggal Daftar',
-            value: _formatDate(userData?['tanggal_daftar']),
-            color: const Color(0xFF81C784),
-          ),
         ],
       ),
     );
@@ -1217,7 +1210,6 @@ class _ProfileScreenState extends State<ProfileScreen>
             .doc(docId)
             .update({
           'password': newPassword,
-          'password_updated_at': FieldValue.serverTimestamp(),
         });
 
         _showSnackBar('Kata sandi berhasil diubah');
