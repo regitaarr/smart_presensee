@@ -396,8 +396,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         nisn: nisn,
         name:
             null, // Remove name field - name can be retrieved from 'siswa' collection using NISN
-        image: _image,
-        registeredOn: Timestamp.now(),
+        gambar: _image,
         faceFeatures: _faceFeatures,
       );
 
@@ -406,6 +405,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       // Explicitly remove 'name' field if it exists to ensure it's not saved
       faceData.remove('name');
+      faceData.remove('registeredOn'); // Remove registeredOn field
 
       log('Saving face data without name field: $faceData');
 

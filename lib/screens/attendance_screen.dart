@@ -945,9 +945,27 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(student.nama,
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(student.nama,
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                            IconButton(
+                              onPressed: () => _showEditStudentDialog(student),
+                              icon: const Icon(Icons.edit, size: 18),
+                              color: Colors.grey[600],
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                              tooltip: 'Edit Data Siswa',
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           'NISN: ${student.nisn}',
@@ -1100,6 +1118,260 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ),
       ),
     );
+  }
+
+  // Modify the _showEditStudentDialog function to add a delete button
+  Future<void> _showEditStudentDialog(StudentAttendanceModel student) async {
+    final TextEditingController nameController =
+        TextEditingController(text: student.nama);
+    String selectedClass = student.kelas;
+    String selectedGender = student.jenisKelamin;
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Edit Data Siswa'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Student info header
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.person, color: Color(0xFF4CAF50)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'NISN: ${student.nisn}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Name field
+                    TextFormField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nama Siswa',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Class dropdown
+                    DropdownButtonFormField<String>(
+                      value: selectedClass,
+                      decoration: const InputDecoration(
+                        labelText: 'Kelas',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.class_),
+                      ),
+                      items: classOptions.map((kelas) {
+                        return DropdownMenuItem<String>(
+                          value: kelas,
+                          child: Text(kelas.toUpperCase()),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedClass = value!;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Gender dropdown
+                    DropdownButtonFormField<String>(
+                      value: selectedGender,
+                      decoration: const InputDecoration(
+                        labelText: 'Jenis Kelamin',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.people),
+                      ),
+                      items: genderOptions.map((gender) {
+                        return DropdownMenuItem<String>(
+                          value: gender,
+                          child: Text(genderLabels[gender]!),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedGender = value!;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                // Delete button
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _deleteStudent(student.nisn);
+                  },
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  label:
+                      const Text('Hapus', style: TextStyle(color: Colors.red)),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Batal'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (nameController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Nama siswa tidak boleh kosong'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    Navigator.of(context).pop({
+                      'nama': nameController.text.trim(),
+                      'kelas': selectedClass,
+                      'jenis_kelamin': selectedGender,
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4CAF50),
+                  ),
+                  child: const Text('Simpan'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      await _updateStudentData(student.nisn, result);
+    }
+  }
+
+  // Add this function after _updateStudentData
+  Future<void> _deleteStudent(String nisn) async {
+    try {
+      setState(() {
+        isLoading = true;
+      });
+
+      // Show confirmation dialog
+      final bool? confirm = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Hapus Siswa'),
+            content: const Text(
+              'Apakah Anda yakin ingin menghapus data siswa ini? Tindakan ini tidak dapat dibatalkan.',
+              style: TextStyle(color: Colors.red),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Batal'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                ),
+                child: const Text('Hapus'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirm != true) {
+        return;
+      }
+
+      // Delete student data
+      await FirebaseFirestore.instance.collection('siswa').doc(nisn).delete();
+
+      // Delete face registration data if exists
+      QuerySnapshot faceSnapshot = await FirebaseFirestore.instance
+          .collection('wajah_siswa')
+          .where('nisn', isEqualTo: nisn)
+          .get();
+
+      for (var doc in faceSnapshot.docs) {
+        await doc.reference.delete();
+      }
+
+      // Delete attendance records
+      QuerySnapshot attendanceSnapshot = await FirebaseFirestore.instance
+          .collection('presensi')
+          .where('nisn', isEqualTo: nisn)
+          .get();
+
+      for (var doc in attendanceSnapshot.docs) {
+        await doc.reference.delete();
+      }
+
+      _showToast('Data siswa berhasil dihapus');
+      await _loadStudentData();
+    } catch (e) {
+      log('Error deleting student: $e');
+      _showToast('Gagal menghapus data siswa: ${e.toString()}');
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  // Add this function after _showEditStudentDialog
+  Future<void> _updateStudentData(
+      String nisn, Map<String, dynamic> data) async {
+    try {
+      setState(() {
+        isLoading = true;
+      });
+
+      await FirebaseFirestore.instance.collection('siswa').doc(nisn).update({
+        'nama_siswa': data['nama'],
+        'kelas_sw': data['kelas'],
+        'jenis_kelamin': data['jenis_kelamin'],
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      _showToast('Data siswa berhasil diperbarui');
+      await _loadStudentData();
+    } catch (e) {
+      log('Error updating student data: $e');
+      _showToast('Gagal memperbarui data siswa: ${e.toString()}');
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 }
 
@@ -2038,12 +2310,12 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                     onPressed: () => _showEditAttendanceDialog(record: record),
                     icon: const Icon(Icons.edit, size: 20),
                     color: Colors.grey[600],
-                    tooltip: 'Edit Presensi',
                     padding: const EdgeInsets.all(8),
                     constraints: const BoxConstraints(
                       minWidth: 36,
                       minHeight: 36,
                     ),
+                    tooltip: 'Edit Presensi',
                   ),
                   const SizedBox(width: 8),
 

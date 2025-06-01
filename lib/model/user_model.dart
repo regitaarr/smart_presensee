@@ -6,17 +6,19 @@ class UserModel {
   String? idWajah; // Changed from 'id' to 'idWajah'
   String? nisn; // Added NISN as foreign key from siswa collection
   String? name;
-  String? image;
+  String? gambar;
   FaceFeatures? faceFeatures;
   Timestamp? registeredOn;
+  String? kelas_sw; // Added kelas_sw field
 
   UserModel({
     this.idWajah,
     this.nisn,
     this.name,
-    this.image,
+    this.gambar,
     this.faceFeatures,
     this.registeredOn,
+    this.kelas_sw,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -24,11 +26,12 @@ class UserModel {
       idWajah: json['id_wajah'],
       nisn: json['nisn'],
       name: json['name'],
-      image: json['image'],
+      gambar: json['gambar'],
       faceFeatures: json["faceFeatures"] != null
           ? FaceFeatures.fromJson(json["faceFeatures"])
           : null,
       registeredOn: json['registeredOn'],
+      kelas_sw: json['kelas_sw'],
     );
   }
 
@@ -37,9 +40,10 @@ class UserModel {
       'id_wajah': idWajah,
       'nisn': nisn,
       'name': name,
-      'image': image,
+      'gambar': gambar,
       'faceFeatures': faceFeatures?.toJson() ?? {},
       'registeredOn': registeredOn,
+      'kelas_sw': kelas_sw,
     };
   }
 }

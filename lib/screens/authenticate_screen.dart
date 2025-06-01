@@ -186,15 +186,13 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
       String attendanceId = await _generateAttendanceId();
 
-      // Updated attendance data without 'nama' field
+      // Updated attendance data without nip field
       Map<String, dynamic> attendanceData = {
         'id_presensi': attendanceId,
         'nisn': nisn,
-        // 'nama' field removed - no longer needed for face recognition attendance
         'tanggal_waktu': Timestamp.now(),
         'status': 'hadir',
         'metode': 'face_recognition',
-        'created_at': FieldValue.serverTimestamp(),
       };
 
       log('Saving attendance data: $attendanceData');
@@ -515,13 +513,33 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       showToast(
           "Terjadi kesalahan saat mengambil data wajah!. Silahkan coba lagi",
           isError: true);
-    }).then((snap) {
+    }).then((snap) async {
       if (snap.docs.isNotEmpty) {
         users.clear();
         log('📊 Total wajah terdaftar: ${snap.docs.length}');
 
         for (var doc in snap.docs) {
           UserModel user = UserModel.fromJson(doc.data());
+
+          // Load student class information
+          if (user.nisn != null) {
+            try {
+              DocumentSnapshot studentDoc = await FirebaseFirestore.instance
+                  .collection('siswa')
+                  .doc(user.nisn)
+                  .get();
+
+              if (studentDoc.exists) {
+                Map<String, dynamic> studentData =
+                    studentDoc.data() as Map<String, dynamic>;
+                user.kelas_sw = studentData['kelas_sw'];
+                log('Loaded class info for NISN ${user.nisn}: ${user.kelas_sw}');
+              }
+            } catch (e) {
+              log('Error loading student class info: $e');
+            }
+          }
+
           double similarity = compareFaces(_faceFeatures!, user.faceFeatures!);
           if (similarity >= 0.8 && similarity <= 1.5) {
             users.add([user, similarity]);
@@ -550,7 +568,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
     bool faceMatched = false;
     for (List user in users) {
-      image1.bitmap = (user.first as UserModel).image;
+      image1.bitmap = (user.first as UserModel).gambar;
       image1.imageType = regula.ImageType.PRINTED;
 
       var request = regula.MatchFacesRequest();

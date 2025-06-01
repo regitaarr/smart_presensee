@@ -728,7 +728,6 @@ class _StudentScreenState extends State<StudentScreen>
         'jenis_kelamin': _selectedGender,
         'kelas_sw': _selectedClass,
         'nip': _walikelasNip, // Add the wali kelas NIP
-        'tanggal_daftar': Timestamp.now(),
       });
 
       _showSuccessToast('Data siswa berhasil disimpan!');

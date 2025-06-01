@@ -131,7 +131,6 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
                 'tanggal_waktu': Timestamp.now(),
                 'status': 'hadir',
                 'metode': 'face_recognition_backup',
-                'created_at': FieldValue.serverTimestamp(),
               });
         });
 
@@ -248,7 +247,7 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
 
                     // Greeting text
                     Text(
-                      "Selamat, ${studentName ?? widget.user.name}!",
+                      "HAI, ${studentName ?? widget.user.name}!",
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 24,
