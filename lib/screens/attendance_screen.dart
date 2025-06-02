@@ -5,6 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:smart_presensee/screens/student_screen.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:csv/csv.dart';
+import 'package:universal_html/html.dart' as html;
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cross_file/cross_file.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final String userEmail;
@@ -564,6 +572,162 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return '${days[date.weekday % 7]}, ${date.day} ${months[date.month]} ${date.year}';
   }
 
+  String _formatDateForFilename(DateTime date) {
+    return '${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _downloadDailyReport() async {
+    try {
+      setState(() {
+        isLoading = true;
+      });
+
+      // Get all students' attendance for the selected date
+      DateTime startOfDay = DateTime(
+          selectedDate.year, selectedDate.month, selectedDate.day, 0, 0, 0);
+      DateTime endOfDay = DateTime(
+          selectedDate.year, selectedDate.month, selectedDate.day, 23, 59, 59);
+
+      // Query all attendance records for the selected date
+      QuerySnapshot attendanceSnapshot = await FirebaseFirestore.instance
+          .collection('presensi')
+          .where('tanggal_waktu',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('tanggal_waktu',
+              isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+          .get();
+
+      // Get all students
+      QuerySnapshot studentSnapshot = await FirebaseFirestore.instance
+          .collection('siswa')
+          .orderBy('nama_siswa')
+          .get();
+
+      // Create a map to store attendance status for each student
+      Map<String, String> studentAttendance = {};
+      for (var doc in studentSnapshot.docs) {
+        studentAttendance[doc.id] = 'alpha'; // Default status
+      }
+
+      // Update attendance status from records
+      for (var doc in attendanceSnapshot.docs) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        String nisn = data['nisn'];
+        String status = data['status'] ?? 'alpha';
+        studentAttendance[nisn] = status;
+      }
+
+      // Prepare CSV data
+      List<List<dynamic>> csvData = [];
+
+      // Add header row
+      csvData.add([
+        'NISN',
+        'Nama Siswa',
+        'Kelas',
+        'Jenis Kelamin',
+        'Status Kehadiran',
+        'Metode'
+      ]);
+
+      // Add data rows
+      for (var doc in studentSnapshot.docs) {
+        Map<String, dynamic> studentData = doc.data() as Map<String, dynamic>;
+        String nisn = doc.id;
+        String status = studentAttendance[nisn] ?? 'alpha';
+
+        // Find the attendance record for this student
+        String metode = 'manual';
+        for (var attendanceDoc in attendanceSnapshot.docs) {
+          Map<String, dynamic> attendanceData =
+              attendanceDoc.data() as Map<String, dynamic>;
+          if (attendanceData['nisn'] == nisn) {
+            metode = attendanceData['metode'] ?? 'manual';
+            break;
+          }
+        }
+
+        csvData.add([
+          nisn,
+          studentData['nama_siswa'] ?? 'Nama tidak tersedia',
+          studentData['kelas_sw'] ?? 'Tidak diketahui',
+          studentData['jenis_kelamin'] == 'l' ? 'Laki-laki' : 'Perempuan',
+          status.toUpperCase(),
+          metode == 'face_recognition' ? 'Wajah' : 'Manual'
+        ]);
+      }
+
+      // Add summary row
+      Map<String, int> statusCount = {
+        'hadir': 0,
+        'sakit': 0,
+        'izin': 0,
+        'alpha': 0
+      };
+
+      for (var status in studentAttendance.values) {
+        statusCount[status] = (statusCount[status] ?? 0) + 1;
+      }
+
+      csvData.add([]); // Empty row
+      csvData.add(['REKAPITULASI KEHADIRAN']);
+      csvData.add(['Tanggal', _formatDate(selectedDate)]);
+      csvData.add(['Total Siswa', studentSnapshot.docs.length.toString()]);
+      csvData.add(['Hadir', statusCount['hadir'].toString()]);
+      csvData.add(['Sakit', statusCount['sakit'].toString()]);
+      csvData.add(['Izin', statusCount['izin'].toString()]);
+      csvData.add(['Alpha', statusCount['alpha'].toString()]);
+
+      // Convert to CSV
+      String csv = const ListToCsvConverter().convert(csvData);
+
+      // Generate filename
+      String filename =
+          'laporan_kehadiran_${_formatDateForFilename(selectedDate)}.csv';
+
+      if (kIsWeb) {
+        // Web platform
+        final bytes = utf8.encode(csv);
+        final blob = html.Blob([bytes]);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute('download', filename)
+          ..click();
+        html.Url.revokeObjectUrl(url);
+      } else {
+        // Mobile platform
+        final directory = await getTemporaryDirectory();
+        final file = File('${directory.path}/$filename');
+        await file.writeAsString(csv);
+        await Share.shareXFiles([XFile(file.path)],
+            text: 'Laporan Kehadiran ${_formatDate(selectedDate)}');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Laporan berhasil diunduh'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      log('Error downloading report: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal mengunduh laporan: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -581,6 +745,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            onPressed: _downloadDailyReport,
+            icon: const Icon(Icons.download, color: Colors.white),
+            tooltip: 'Unduh Laporan',
+          ),
           IconButton(
             onPressed: () {
               Navigator.push(
@@ -1442,6 +1611,105 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     'alpha': 'Alpha'
   };
 
+  String _formatDateForFilename(DateTime date) {
+    return '${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _downloadDailyReport() async {
+    try {
+      setState(() {
+        isLoading = true;
+      });
+
+      // Prepare CSV data
+      List<List<dynamic>> csvData = [];
+
+      // Add header row
+      csvData.add(['Tanggal', 'Waktu', 'Status', 'Metode']);
+
+      // Add data rows
+      for (var record in attendanceHistory) {
+        csvData.add([
+          _formatDate(record.tanggalWaktu),
+          _formatTime(record.tanggalWaktu),
+          record.status.toUpperCase(),
+          record.metode == 'face_recognition' ? 'Wajah' : 'Manual'
+        ]);
+      }
+
+      // Add summary section
+      Map<String, int> statusCount = {
+        'hadir': 0,
+        'sakit': 0,
+        'izin': 0,
+        'alpha': 0
+      };
+
+      for (var record in attendanceHistory) {
+        statusCount[record.status] = (statusCount[record.status] ?? 0) + 1;
+      }
+
+      csvData.add([]); // Empty row
+      csvData.add(['REKAPITULASI KEHADIRAN']);
+      csvData.add(['Nama Siswa', widget.student.nama]);
+      csvData.add(['NISN', widget.student.nisn]);
+      csvData.add(['Kelas', widget.student.kelas.toUpperCase()]);
+      csvData.add(['Total Presensi', attendanceHistory.length.toString()]);
+      csvData.add(['Hadir', statusCount['hadir'].toString()]);
+      csvData.add(['Sakit', statusCount['sakit'].toString()]);
+      csvData.add(['Izin', statusCount['izin'].toString()]);
+      csvData.add(['Alpha', statusCount['alpha'].toString()]);
+
+      // Convert to CSV
+      String csv = const ListToCsvConverter().convert(csvData);
+
+      // Generate filename
+      String filename =
+          'laporan_kehadiran_${widget.student.nisn}_${_formatDateForFilename(DateTime.now())}.csv';
+
+      if (kIsWeb) {
+        // Web platform
+        final bytes = utf8.encode(csv);
+        final blob = html.Blob([bytes]);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute('download', filename)
+          ..click();
+        html.Url.revokeObjectUrl(url);
+      } else {
+        // Mobile platform
+        final directory = await getTemporaryDirectory();
+        final file = File('${directory.path}/$filename');
+        await file.writeAsString(csv);
+        await Share.shareXFiles([XFile(file.path)],
+            text: 'Laporan Kehadiran ${widget.student.nama}');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Laporan berhasil diunduh'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      log('Error downloading report: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal mengunduh laporan: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1992,6 +2260,11 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
+          IconButton(
+            onPressed: _downloadDailyReport,
+            icon: const Icon(Icons.download, color: Colors.white),
+            tooltip: 'Unduh Laporan',
+          ),
           IconButton(
             onPressed: () => _showEditAttendanceDialog(),
             icon: const Icon(Icons.add, color: Colors.white),
