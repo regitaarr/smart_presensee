@@ -78,7 +78,7 @@ class _SplashScreenState extends State<SplashScreen>
                           width: 200,
                           height: 200,
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 5),
                         const Text(
                           'SMART PRESENSEE',
                           style: TextStyle(
@@ -100,8 +100,8 @@ class _SplashScreenState extends State<SplashScreen>
                     )
                   : Image.asset(
                       'assets/images/logo2.png',
-                      width: 200,
-                      height: 200,
+                      width: 300,
+                      height: 300,
                       key: const ValueKey('logo2'),
                     ),
             ),
