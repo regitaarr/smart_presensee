@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smart_presensee/admin/admin_dashboard.dart';
 import 'package:smart_presensee/screens/dashboard_screen.dart';
 import 'package:smart_presensee/screens/signup_screen.dart';
+import 'package:smart_presensee/screens/forgot_password_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
@@ -505,40 +506,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   void _showForgotPasswordDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'Lupa Kata Sandi',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2E7D32),
-            ),
-          ),
-          content: const Text(
-            'Silakan hubungi administrator untuk mereset kata sandi Anda.',
-            style: TextStyle(color: Color(0xFF6B7280)),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text(
-                'OK',
-                style: TextStyle(
-                  color: Color(0xFF81C784),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const ForgotPasswordScreen(),
+      ),
     );
   }
 

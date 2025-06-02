@@ -14,6 +14,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _namaController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _whatsappController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
@@ -63,6 +64,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     _slideController.dispose();
     _namaController.dispose();
     _emailController.dispose();
+    _whatsappController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -235,6 +237,28 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                                                 r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
                                             .hasMatch(value.trim())) {
                                           return 'Format email tidak valid';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+
+                                    const SizedBox(height: 16),
+
+                                    // WhatsApp Field
+                                    _buildModernTextField(
+                                      controller: _whatsappController,
+                                      label: 'Nomor WhatsApp',
+                                      hint: 'Contoh: 628123xxxxxx',
+                                      icon: Icons.phone_android_outlined,
+                                      keyboardType: TextInputType.phone,
+                                      validator: (value) {
+                                        if (value == null ||
+                                            value.trim().isEmpty) {
+                                          return 'Nomor WhatsApp tidak boleh kosong';
+                                        }
+                                        if (!RegExp(r'^628[0-9]{8,}$')
+                                            .hasMatch(value.trim())) {
+                                          return 'Format nomor WhatsApp tidak valid (contoh: 628123xxxxxx)';
                                         }
                                         return null;
                                       },
@@ -580,6 +604,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     try {
       final String nama = _namaController.text.trim();
       final String email = _emailController.text.trim();
+      final String whatsapp = _whatsappController.text.trim();
       final String password = _passwordController.text.trim();
       final String role = _selectedRole!;
 
@@ -600,6 +625,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         'id_pengguna': userId,
         'nama': nama,
         'email': email,
+        'whatsapp': whatsapp,
         'password': password,
         'role': role,
       });

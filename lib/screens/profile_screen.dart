@@ -1190,7 +1190,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       }
     } catch (e) {
       log('Error updating walikelas data: $e');
-      throw e;
+      rethrow;
     }
   }
 
