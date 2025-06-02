@@ -294,7 +294,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             ),
                             textAlign: TextAlign.center,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Kami akan mengirimkan kode OTP satu kali ke nomor Whatsapp Anda',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
                           if (!_otpSent) ...[
                             _buildModernTextField(
                               controller: _phoneController,
