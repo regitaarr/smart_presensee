@@ -73,8 +73,8 @@ class _CameraViewState extends State<CameraView> with TickerProviderStateMixin {
 
         // Camera height should be responsive to available space
         final cameraHeight = (availableHeight * 0.7).clamp(180.0, 280.0);
-        final buttonHeight = 45.0;
-        final spacing = 8.0;
+        const buttonHeight = 45.0;
+        const spacing = 8.0;
 
         return FadeTransition(
           opacity: _fadeAnimation,
@@ -113,7 +113,7 @@ class _CameraViewState extends State<CameraView> with TickerProviderStateMixin {
                 ),
               ),
 
-              SizedBox(height: spacing),
+              const SizedBox(height: spacing),
 
               // Camera Button
               SizedBox(
@@ -402,7 +402,7 @@ class _CameraViewState extends State<CameraView> with TickerProviderStateMixin {
         InputImage inputImage = InputImage.fromBytes(
           bytes: bytes,
           metadata: InputImageMetadata(
-            size: Size(800, 800),
+            size: const Size(800, 800),
             rotation: InputImageRotation.rotation0deg,
             format: InputImageFormat.bgra8888,
             bytesPerRow: 800 * 4,

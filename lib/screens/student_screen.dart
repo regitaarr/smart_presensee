@@ -152,11 +152,11 @@ class _StudentScreenState extends State<StudentScreen>
                         ),
                       ),
                       const SizedBox(width: 16),
-                      Expanded(
+                      const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
+                            Text(
                               'Data Siswa',
                               style: TextStyle(
                                 fontSize: 20,
@@ -164,7 +164,7 @@ class _StudentScreenState extends State<StudentScreen>
                                 color: Color(0xFF2E7D32),
                               ),
                             ),
-                            const Text(
+                            Text(
                               'Tambah data siswa baru',
                               style: TextStyle(
                                 fontSize: 14,

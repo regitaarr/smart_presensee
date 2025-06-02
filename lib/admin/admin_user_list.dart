@@ -152,7 +152,7 @@ class _AdminUserListState extends State<AdminUserList> {
                         valueColor:
                             AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50))))
                 : filteredUserList.isEmpty
-                    ? Center(child: Text('Tidak ada data pengguna'))
+                    ? const Center(child: Text('Tidak ada data pengguna'))
                     : ListView.builder(
                         padding: const EdgeInsets.all(16),
                         itemCount: filteredUserList.length,

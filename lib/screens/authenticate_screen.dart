@@ -74,7 +74,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       QuerySnapshot lastRecords = await FirebaseFirestore.instance
           .collection('presensi')
           .where('id_presensi', isGreaterThanOrEqualTo: prefix)
-          .where('id_presensi', isLessThan: prefix + 'z')
+          .where('id_presensi', isLessThan: '${prefix}z')
           .orderBy('id_presensi', descending: true)
           .limit(1)
           .get();
@@ -126,7 +126,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     }
   }
 
-  // Function to check if attendance already exists today - SIMPLIFIED VERSION
+  // Function to check if attendance already exists today - OPTIMIZED VERSION
   Future<bool> _checkTodayAttendance(String nisn) async {
     try {
       DateTime now = DateTime.now();
@@ -136,24 +136,54 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
       log('Checking attendance for NISN: $nisn on ${now.toString().substring(0, 10)}');
 
+      // First get the document ID for today's date
+      String todayDocId =
+          '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+
+      // Query with a single field first
       QuerySnapshot existingRecords = await FirebaseFirestore.instance
           .collection('presensi')
           .where('nisn', isEqualTo: nisn)
-          .where('tanggal_waktu',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-          .where('tanggal_waktu',
-              isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
-          .limit(1)
           .get();
 
-      bool hasAttendance = existingRecords.docs.isNotEmpty;
+      // Filter the results in memory for the date range
+      bool hasAttendance = existingRecords.docs.any((doc) {
+        Timestamp timestamp = doc.get('tanggal_waktu') as Timestamp;
+        DateTime docDate = timestamp.toDate();
+        return docDate.isAfter(startOfDay) && docDate.isBefore(endOfDay);
+      });
 
       if (hasAttendance) {
-        var existingData =
-            existingRecords.docs.first.data() as Map<String, dynamic>;
+        // Get the first matching document
+        var existingData = existingRecords.docs.firstWhere((doc) {
+          Timestamp timestamp = doc.get('tanggal_waktu') as Timestamp;
+          DateTime docDate = timestamp.toDate();
+          return docDate.isAfter(startOfDay) && docDate.isBefore(endOfDay);
+        }).data() as Map<String, dynamic>;
+
         var existingTime =
             (existingData['tanggal_waktu'] as Timestamp).toDate();
         log('Found existing attendance for NISN $nisn at ${existingTime.toString()}');
+
+        // Get student name from siswa collection
+        DocumentSnapshot studentDoc = await FirebaseFirestore.instance
+            .collection('siswa')
+            .doc(nisn)
+            .get();
+
+        String studentName = "siswa";
+        if (studentDoc.exists) {
+          studentName = studentDoc.get('nama_siswa') as String;
+        }
+
+        // Show message in popup dialog
+        String timeString =
+            '${existingTime.hour.toString().padLeft(2, '0')}:${existingTime.minute.toString().padLeft(2, '0')}';
+        _showFailureDialog(
+          title: "Presensi Gagal",
+          description:
+              "Kamu $studentName sudah melakukan presensi hari ini pada pukul $timeString!",
+        );
       } else {
         log('No existing attendance found for NISN $nisn today');
       }
@@ -161,6 +191,11 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       return hasAttendance;
     } catch (e) {
       log('Error checking today attendance: $e');
+      _showFailureDialog(
+        title: "Error",
+        description:
+            "Terjadi kesalahan saat memeriksa presensi: ${e.toString()}",
+      );
       return false;
     }
   }
@@ -177,10 +212,10 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       final String nisn = user.nisn!.trim();
       log('Starting attendance save process for NISN: $nisn');
 
+      // Check if student has already attended today
       bool hasAttendedToday = await _checkTodayAttendance(nisn);
       if (hasAttendedToday) {
         log('Attendance already exists for NISN $nisn today');
-        showToast('Anda sudah melakukan presensi hari ini!', isError: true);
         return false;
       }
 
@@ -204,6 +239,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
       log('Attendance saved successfully with ID: $attendanceId');
 
+      // Verify the save was successful
       DocumentSnapshot savedDoc = await FirebaseFirestore.instance
           .collection('presensi')
           .doc(attendanceId)
@@ -530,29 +566,18 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                   .get();
 
               if (studentDoc.exists) {
-                Map<String, dynamic> studentData =
-                    studentDoc.data() as Map<String, dynamic>;
-                user.kelas_sw = studentData['kelas_sw'];
-                log('Loaded class info for NISN ${user.nisn}: ${user.kelas_sw}');
+                log('Loaded student info for NISN ${user.nisn}');
               }
             } catch (e) {
-              log('Error loading student class info: $e');
+              log('Error loading student info: $e');
             }
           }
 
-          double similarity = compareFaces(_faceFeatures!, user.faceFeatures!);
-          if (similarity >= 0.8 && similarity <= 1.5) {
-            users.add([user, similarity]);
-          }
+          // Add all users to the list for comparison
+          users.add([user, 1.0]);
         }
 
-        log('✅ Filtered Users with matching similarity: ${users.length}');
-
-        setState(() {
-          users.sort((a, b) => (((a.last as double) - 1).abs())
-              .compareTo(((b.last as double) - 1).abs()));
-        });
-
+        log('✅ Total users loaded for comparison: ${users.length}');
         _matchFaces();
       } else {
         _showFailureDialog(
@@ -567,75 +592,88 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     log('🔄 Starting face matching with ${users.length} candidates...');
 
     bool faceMatched = false;
+    double highestSimilarity = 0.0;
+    UserModel? bestMatch;
+
     for (List user in users) {
-      image1.bitmap = (user.first as UserModel).gambar;
-      image1.imageType = regula.ImageType.PRINTED;
+      try {
+        image1.bitmap = (user.first as UserModel).gambar;
+        image1.imageType = regula.ImageType.PRINTED;
 
-      var request = regula.MatchFacesRequest();
-      request.images = [image1, image2];
-      dynamic value = await regula.FaceSDK.matchFaces(jsonEncode(request));
+        var request = regula.MatchFacesRequest();
+        request.images = [image1, image2];
+        dynamic value = await regula.FaceSDK.matchFaces(jsonEncode(request));
 
-      var response = regula.MatchFacesResponse.fromJson(json.decode(value));
-      dynamic str = await regula.FaceSDK.matchFacesSimilarityThresholdSplit(
-          jsonEncode(response!.results), 0.75);
+        var response = regula.MatchFacesResponse.fromJson(json.decode(value));
+        dynamic str = await regula.FaceSDK.matchFacesSimilarityThresholdSplit(
+            jsonEncode(response!.results), 0.75);
 
-      var split =
-          regula.MatchFacesSimilarityThresholdSplit.fromJson(json.decode(str));
-      setState(() {
-        _similarity = split!.matchedFaces.isNotEmpty
-            ? (split.matchedFaces[0]!.similarity! * 100).toStringAsFixed(2)
-            : "error";
-        log("📊 Face similarity: $_similarity%");
+        var split = regula.MatchFacesSimilarityThresholdSplit.fromJson(
+            json.decode(str));
 
-        if (_similarity != "error" && double.parse(_similarity) > 90.00) {
-          faceMatched = true;
-          loggingUser = user.first;
-          log('✅ Face matched for user: ${loggingUser?.name}, NISN: ${loggingUser?.nisn}');
-        } else {
-          faceMatched = false;
-        }
-      });
+        if (split!.matchedFaces.isNotEmpty) {
+          double similarity = split.matchedFaces[0]!.similarity! * 100;
+          log("📊 Face similarity for ${(user.first as UserModel).nisn}: $similarity%");
 
-      if (faceMatched) {
-        log('💾 Attempting to save attendance record...');
-        bool attendanceSaved = await _saveAttendanceRecord(loggingUser!);
-
-        setState(() {
-          trialNumber = 1;
-          isMatching = false;
-        });
-
-        if (attendanceSaved) {
-          log('✅ Attendance saved, navigating to success screen');
-          if (mounted) {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => AuthenticatedUserScreen(
-                  user: loggingUser!,
-                  attendanceAlreadySaved: true,
-                ),
-              ),
-            );
+          if (similarity > highestSimilarity) {
+            highestSimilarity = similarity;
+            bestMatch = user.first as UserModel;
           }
-        } else {
-          log('❌ Failed to save attendance, showing error');
-          _showFailureDialog(
-            title: "Gagal Menyimpan Presensi",
-            description:
-                "Terjadi kesalahan saat menyimpan data presensi. Silakan coba lagi.",
-          );
+
+          if (similarity > 85.00) {
+            faceMatched = true;
+            loggingUser = user.first;
+            log('✅ Face matched for user: ${loggingUser?.name}, NISN: ${loggingUser?.nisn}');
+
+            // Save attendance for the matched user
+            log('💾 Attempting to save attendance record...');
+            bool attendanceSaved = await _saveAttendanceRecord(loggingUser!);
+
+            setState(() {
+              trialNumber = 1;
+              isMatching = false;
+            });
+
+            if (attendanceSaved) {
+              log('✅ Attendance saved, navigating to success screen');
+              if (mounted) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => AuthenticatedUserScreen(
+                      user: loggingUser!,
+                      attendanceAlreadySaved: true,
+                    ),
+                  ),
+                );
+              }
+            } else {
+              log('❌ Failed to save attendance, showing error');
+              _showFailureDialog(
+                title: "Gagal Menyimpan Presensi",
+                description:
+                    "Terjadi kesalahan saat menyimpan data presensi. Silakan coba lagi.",
+              );
+            }
+            break;
+          }
         }
-        break;
+      } catch (e) {
+        log('❌ Error during face matching: $e');
+        continue; // Continue with next user instead of breaking
       }
     }
 
     if (!faceMatched) {
+      if (bestMatch != null) {
+        log('Best match found with similarity: $highestSimilarity%');
+      }
+
       if (trialNumber == 4) {
         setState(() => trialNumber = 1);
         _showFailureDialog(
           title: "Presensi gagal!",
           description:
-              "Wajah tidak cocok dengan yang ada di database!. Silahkan coba kembali",
+              "Wajah tidak cocok dengan yang ada di database. Silahkan coba kembali.",
         );
       } else if (trialNumber == 3) {
         setState(() {
@@ -649,7 +687,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         _showFailureDialog(
           title: "Presensi gagal!",
           description:
-              "Wajah tidak cocok dengan yang ada di database!. Silahkan coba kembali",
+              "Wajah tidak cocok dengan yang ada di database. Silahkan coba kembali.",
         );
       }
     }
@@ -936,7 +974,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFFFCC80)),
       ),
-      child: Column(
+      child: const Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Judul di tengah
@@ -944,7 +982,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
             alignment: Alignment.center,
             child: Text(
               'Petunjuk Presensi',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFFFF7043),
@@ -952,9 +990,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
               textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           // List tetap rata kiri
-          const Text(
+          Text(
             '1. Posisikan wajah di tengah kamera\n'
             '2. Pastikan pencahayaan cukup\n'
             '3. Hindari menggunakan masker\n'

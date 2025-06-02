@@ -9,7 +9,6 @@ class UserModel {
   String? gambar;
   FaceFeatures? faceFeatures;
   Timestamp? registeredOn;
-  String? kelas_sw; // Added kelas_sw field
 
   UserModel({
     this.idWajah,
@@ -18,7 +17,6 @@ class UserModel {
     this.gambar,
     this.faceFeatures,
     this.registeredOn,
-    this.kelas_sw,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -31,7 +29,6 @@ class UserModel {
           ? FaceFeatures.fromJson(json["faceFeatures"])
           : null,
       registeredOn: json['registeredOn'],
-      kelas_sw: json['kelas_sw'],
     );
   }
 
@@ -43,7 +40,6 @@ class UserModel {
       'gambar': gambar,
       'faceFeatures': faceFeatures?.toJson() ?? {},
       'registeredOn': registeredOn,
-      'kelas_sw': kelas_sw,
     };
   }
 }

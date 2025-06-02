@@ -355,8 +355,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
       floatingActionButton: FloatingActionButton(
         onPressed: _loadStatistics,
         backgroundColor: const Color(0xFF4CAF50),
-        child: const Icon(Icons.refresh, color: Colors.white),
         tooltip: 'Refresh Data',
+        child: const Icon(Icons.refresh, color: Colors.white),
       ),
     );
   }
