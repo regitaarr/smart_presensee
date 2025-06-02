@@ -15,6 +15,7 @@ class DashboardPage extends StatefulWidget {
     super.key,
     required this.userName,
     required this.userEmail,
+    required String idPengguna,
   });
 
   @override

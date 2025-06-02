@@ -486,6 +486,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 builder: (context) => DashboardPage(
                   userName: userName,
                   userEmail: email,
+                  idPengguna: '',
                 ),
               ),
             );
