@@ -328,16 +328,6 @@ class _AdminFaceListState extends State<AdminFaceList> {
                                     'Jenis Kelamin',
                                     _formatGender(face['jenis_kelamin']),
                                   ),
-                                  const SizedBox(height: 8),
-                                  _buildInfoRow(
-                                    'Tanggal Daftar',
-                                    face['registeredOn'] != null
-                                        ? (face['registeredOn'] as Timestamp)
-                                            .toDate()
-                                            .toString()
-                                            .substring(0, 10)
-                                        : '-',
-                                  ),
                                 ],
                               ),
                             ),

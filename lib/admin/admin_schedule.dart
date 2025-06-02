@@ -283,7 +283,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
       QuerySnapshot lastRecords = await FirebaseFirestore.instance
           .collection('jadwal')
           .where('id_jadwal', isGreaterThanOrEqualTo: prefix)
-          .where('id_jadwal', isLessThan: prefix + 'z')
+          .where('id_jadwal', isLessThan: '${prefix}z')
           .orderBy('id_jadwal', descending: true)
           .limit(1)
           .get();
@@ -1046,9 +1046,9 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                               const Icon(Icons.error,
                                   size: 64, color: Colors.red),
                               const SizedBox(height: 16),
-                              Text(
+                              const Text(
                                 'Error memuat data',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.red,
@@ -1132,8 +1132,8 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showAddEditScheduleDialog(),
         backgroundColor: const Color(0xFF4CAF50),
-        child: const Icon(Icons.add, color: Colors.white),
         tooltip: 'Tambah Jadwal',
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }

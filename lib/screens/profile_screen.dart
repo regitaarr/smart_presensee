@@ -625,15 +625,69 @@ class _ProfileScreenState extends State<ProfileScreen>
         const SizedBox(height: 16),
         _buildModernActionButton(
           icon: Icons.help_outline,
-          title: 'Bantuan',
-          subtitle: 'FAQ dan dukungan',
+          title: 'Panduan Wali Kelas',
+          subtitle: 'Cara Mengubah File CSV Menjadi File Excel (XLSX)',
           gradient: const [Color(0xFF64B5F6), Color(0xFF42A5F5)],
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Fitur bantuan akan segera hadir'),
-                backgroundColor: Color(0xFF81C784),
-              ),
+            showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: const Text(
+                      'Panduan Wali Kelas: Cara Mengubah File CSV Menjadi File Excel (XLSX) Supaya Datanya Rapi'),
+                  content: const SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            '📘 Panduan untuk Wali Kelas: Mengubah File CSV ke Excel (XLSX) Supaya Datanya Rapi'),
+                        SizedBox(height: 8),
+                        Text('Berikut cara mudah merapikan data CSV di Excel:'),
+                        SizedBox(height: 8),
+                        Text('✨ Langkah 1: Buka File CSV'),
+                        Text('1. Buka aplikasi Microsoft Excel.'),
+                        Text(
+                            '2. Klik menu File > Open lalu cari file CSV yang diberikan (misalnya: `laporan_kehadiran_02052025.csv`).'),
+                        Text(
+                            '3. Setelah terbuka, mungkin datanya terlihat berantakan di satu kolom. Tidak perlu panik 😊'),
+                        SizedBox(height: 8),
+                        Text('✨ Langkah 2: Pisahkan Data ke Kolom'),
+                        Text(
+                            '1. Klik pada kolom A (tempat semua data berada).'),
+                        Text('2. Klik menu Data di bagian atas Excel.'),
+                        Text(
+                            '3. Pilih tombol Text to Columns (ikon ini akan membantu kita memisahkan data ke kolom yang benar).'),
+                        SizedBox(height: 8),
+                        Text('✨ Langkah 3: Atur Pemisah Data'),
+                        Text('1. Pilih opsi Delimited lalu klik Next.'),
+                        Text('2. Cek pemisah (delimiter) yang digunakan:'),
+                        Text('   * Centang Tab'),
+                        Text('   * Centang Comma (koma)'),
+                        Text('   * Centang Semicolon (titik koma)'),
+                        Text('3. Klik Next, lalu klik Finish.'),
+                        SizedBox(height: 8),
+                        Text(
+                            '📌 Sekarang data sudah terbagi rapi ke kolom masing-masing!'),
+                        SizedBox(height: 8),
+                        Text('✨ Langkah 4: Simpan Sebagai File Excel (XLSX)'),
+                        Text('1. Klik menu File > Save As.'),
+                        Text('2. Pilih lokasi penyimpanan.'),
+                        Text(
+                            '3. Ganti jenis file menjadi Excel Workbook (.xlsx).'),
+                        Text('4. Klik Save.'),
+                        SizedBox(height: 8),
+                        Text('✅ Selesai!'),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Tutup'),
+                    ),
+                  ],
+                );
+              },
             );
           },
         ),
@@ -808,12 +862,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                     border: Border.all(
                         color: const Color(0xFF81C784).withOpacity(0.3)),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
                       Icon(Icons.info_outline,
-                          color: const Color(0xFF2E7D32), size: 20),
-                      const SizedBox(width: 8),
-                      const Expanded(
+                          color: Color(0xFF2E7D32), size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
                         child: Text(
                           'NIP dan Kelas akan disimpan di data walikelas',
                           style: TextStyle(
@@ -1164,7 +1218,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       }
     } catch (e) {
       log('Error deleting walikelas data: $e');
-      throw e;
+      rethrow;
     }
   }
 
