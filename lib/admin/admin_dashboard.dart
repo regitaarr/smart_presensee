@@ -7,6 +7,7 @@ import 'package:smart_presensee/admin/admin_attendance_list.dart';
 import 'package:smart_presensee/admin/admin_face_list.dart';
 import 'package:smart_presensee/admin/admin_user_list.dart';
 import 'package:smart_presensee/admin/admin_profile_screen.dart';
+import 'package:smart_presensee/admin/admin_report_screen.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'dart:developer';
 
@@ -26,6 +27,8 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   int _selectedIndex = 0;
+  bool _isSidebarCollapsed = false;
+  bool _showProfile = false;
 
   // Statistics variables
   int totalStudents = 0;
@@ -94,263 +97,243 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF4CAF50),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Welcome Header
-            Container(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.admin_panel_settings,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Selamat datang, ${widget.adminName}!',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Administrator Smart Presensee',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.white.withOpacity(0.8),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Ikon profil admin di kanan header
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => AdminProfileScreen(
-                            adminEmail: widget.adminEmail,
-                          ),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF81C784), Color(0xFF66BB6A)],
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.person,
+  Widget _buildSidebar() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: _isSidebarCollapsed ? 80 : 250,
+      color: const Color(0xFF4CAF50),
+      child: Column(
+        children: [
+          const SizedBox(height: 20),
+          // Logo
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Image.asset(
+              'assets/images/logo3.png',
+              height: _isSidebarCollapsed ? 60 : 60,
+              width: _isSidebarCollapsed ? 60 : 60,
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Logo and Title
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisAlignment: _isSidebarCollapsed
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.spaceBetween,
+              children: [
+                if (!_isSidebarCollapsed) ...[
+                  const Flexible(
+                    child: Text(
+                      'Smart Presensee',
+                      style: TextStyle(
                         color: Colors.white,
-                        size: 24,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
-              ),
-            ),
-
-            // Main Content
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.only(top: 20),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(30),
+                IconButton(
+                  icon: Icon(
+                    _isSidebarCollapsed ? Icons.menu_open : Icons.menu,
+                    color: Colors.white,
+                    size: 24,
                   ),
+                  onPressed: () {
+                    setState(() {
+                      _isSidebarCollapsed = !_isSidebarCollapsed;
+                    });
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Statistics Cards
-                      const Center(
-                        child: Text(
-                          'Statistik Hari Ini',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      if (isLoadingStats)
-                        const Center(
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                                Color(0xFF4CAF50)),
-                          ),
-                        )
-                      else
-                        GridView.count(
-                          crossAxisCount: 2,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: 1.5,
-                          children: [
-                            _buildStatCard(
-                              'Total Siswa',
-                              totalStudents.toString(),
-                              Icons.people,
-                              Colors.blue,
-                            ),
-                            _buildStatCard(
-                              'Wajah Terdaftar',
-                              totalFaceRegistered.toString(),
-                              Icons.face,
-                              Colors.purple,
-                            ),
-                            _buildStatCard(
-                              'Hadir Hari Ini',
-                              todayPresent.toString(),
-                              Icons.check_circle,
-                              Colors.green,
-                            ),
-                            _buildStatCard(
-                              'Belum Hadir',
-                              todayAbsent.toString(),
-                              Icons.cancel,
-                              Colors.red,
-                            ),
-                          ],
-                        ),
-
-                      const SizedBox(height: 30),
-
-                      // Quick Actions
-                      const Center(
-                        child: Text(
-                          'Aksi Cepat',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      GridView.count(
-                        crossAxisCount: 2,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                        childAspectRatio: 1.2,
+              ],
+            ),
+          ),
+          const SizedBox(height: 30),
+          // Menu Items
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildMenuItem(
+                icon: Icons.dashboard,
+                title: 'Dashboard',
+                index: 0,
+              ),
+              _buildMenuItem(
+                icon: Icons.people,
+                title: 'Data Siswa',
+                index: 1,
+              ),
+              _buildMenuItem(
+                icon: Icons.face,
+                title: 'Data Wajah',
+                index: 2,
+              ),
+              _buildMenuItem(
+                icon: Icons.calendar_today,
+                title: 'Kelola Jadwal',
+                index: 3,
+              ),
+              _buildMenuItem(
+                icon: Icons.assignment,
+                title: 'Data Presensi',
+                index: 4,
+              ),
+              _buildMenuItem(
+                icon: Icons.person,
+                title: 'Daftar Pengguna',
+                index: 5,
+              ),
+              _buildMenuItem(
+                icon: Icons.description,
+                title: 'Laporan',
+                index: 6,
+              ),
+            ],
+          ),
+          const Spacer(),
+          // Profile Section
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+            ),
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _showProfile = true;
+                });
+              },
+              child: Row(
+                mainAxisAlignment: _isSidebarCollapsed
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.person,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                  if (!_isSidebarCollapsed) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildActionCard(
-                            'Data Siswa',
-                            'Lihat data siswa',
-                            Icons.people_outline,
-                            const Color(0xFF2196F3),
-                            () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const AdminStudentList(),
-                              ),
+                          Text(
+                            widget.adminName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          _buildActionCard(
-                            'Data Wajah',
-                            'Lihat data wajah terdaftar',
-                            Icons.face_retouching_natural,
-                            const Color(0xFF9C27B0),
-                            () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const AdminFaceList(),
-                              ),
+                          Text(
+                            'Administrator',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
                             ),
-                          ),
-                          _buildActionCard(
-                            'Data Presensi',
-                            'Lihat & kelola presensi',
-                            Icons.assignment,
-                            const Color(0xFF4CAF50),
-                            () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const AdminAttendanceList(),
-                              ),
-                            ),
-                          ),
-                          _buildActionCard(
-                            'Kelola Jadwal',
-                            'Atur jadwal pelajaran',
-                            Icons.schedule,
-                            const Color(0xFFFF5722),
-                            () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const AdminScheduleScreen(),
-                              ),
-                            ),
-                          ),
-                          _buildActionCard(
-                            'Daftar Pengguna',
-                            'Lihat semua pengguna',
-                            Icons.supervised_user_circle,
-                            const Color(0xFF607D8B),
-                            () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const AdminUserList(),
-                              ),
-                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
-
-                      const SizedBox(height: 30),
-                    ],
-                  ),
-                ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      color: Colors.white.withOpacity(0.7),
+                      size: 16,
+                    ),
+                  ],
+                ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String title,
+    required int index,
+  }) {
+    bool isSelected = _selectedIndex == index;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedIndex = index;
+          _showProfile = false;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color:
+              isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: _isSidebarCollapsed
+              ? MainAxisAlignment.center
+              : MainAxisAlignment.start,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
+              size: 20,
+            ),
+            if (!_isSidebarCollapsed) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: isSelected
+                        ? Colors.white
+                        : Colors.white.withOpacity(0.7),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Row(
+        children: [
+          _buildSidebar(),
+          Expanded(
+            child: Container(
+              color: Colors.grey[100],
+              child: _buildContent(),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _loadStatistics,
@@ -361,35 +344,257 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  Widget _buildContent() {
+    if (_showProfile) {
+      return AdminProfileScreen(
+        adminEmail: widget.adminEmail,
+      );
+    }
+
+    switch (_selectedIndex) {
+      case 0:
+        return _buildDashboard();
+      case 1:
+        return const AdminStudentList();
+      case 2:
+        return const AdminFaceList();
+      case 3:
+        return const AdminScheduleScreen();
+      case 4:
+        return const AdminAttendanceList();
+      case 5:
+        return const AdminUserList();
+      case 6:
+        return const AdminReportScreen();
+      default:
+        return _buildDashboard();
+    }
+  }
+
+  Widget _buildDashboard() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Welcome Message
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.admin_panel_settings,
+                    color: Color(0xFF4CAF50),
+                    size: 36,
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Selamat datang, ${widget.adminName}!',
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2C3E50),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Administrator Smart Presensee',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 30),
+
+          // Statistics Cards
+          const Text(
+            'Statistik Hari Ini',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          if (isLoadingStats)
+            const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+              ),
+            )
+          else
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 20,
+              childAspectRatio: 1.4,
+              children: [
+                _buildStatCard(
+                  'Total Siswa',
+                  totalStudents.toString(),
+                  Icons.people,
+                  Colors.blueAccent,
+                ),
+                _buildStatCard(
+                  'Wajah Terdaftar',
+                  totalFaceRegistered.toString(),
+                  Icons.face,
+                  Colors.deepPurpleAccent,
+                ),
+                _buildStatCard(
+                  'Hadir Hari Ini',
+                  todayPresent.toString(),
+                  Icons.check_circle,
+                  Colors.greenAccent[700]!,
+                ),
+                _buildStatCard(
+                  'Belum Hadir',
+                  todayAbsent.toString(),
+                  Icons.cancel,
+                  Colors.redAccent,
+                ),
+              ],
+            ),
+
+          const SizedBox(height: 40),
+
+          // Quick Actions
+          const Text(
+            'Aksi Cepat',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 20,
+            childAspectRatio: 1.3,
+            children: [
+              _buildActionCard(
+                'Data Siswa',
+                'Lihat data siswa',
+                Icons.people_outline,
+                Colors.blueAccent,
+                () => setState(() => _selectedIndex = 1),
+              ),
+              _buildActionCard(
+                'Data Wajah',
+                'Lihat data wajah terdaftar',
+                Icons.face_retouching_natural,
+                Colors.deepPurpleAccent,
+                () => setState(() => _selectedIndex = 2),
+              ),
+              _buildActionCard(
+                'Data Presensi',
+                'Lihat & kelola presensi',
+                Icons.assignment,
+                Colors.greenAccent[700]!,
+                () => setState(() => _selectedIndex = 4),
+              ),
+              _buildActionCard(
+                'Kelola Jadwal',
+                'Atur jadwal pelajaran',
+                Icons.schedule,
+                Colors.orangeAccent,
+                () => setState(() => _selectedIndex = 3),
+              ),
+              _buildActionCard(
+                'Daftar Pengguna',
+                'Lihat semua pengguna',
+                Icons.supervised_user_circle,
+                Colors.blueGrey,
+                () => setState(() => _selectedIndex = 5),
+              ),
+              _buildActionCard(
+                'Laporan',
+                'Unduh laporan kehadiran',
+                Icons.description_outlined,
+                Colors.teal,
+                () => setState(() => _selectedIndex = 6),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatCard(
       String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 32),
-          const SizedBox(height: 8),
+          Icon(
+            icon,
+            size: 40,
+            color: color,
+          ),
+          const SizedBox(height: 16),
           Text(
             value,
             style: TextStyle(
-              fontSize: 24,
+              fontSize: 30,
               fontWeight: FontWeight.bold,
               color: color,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
             title,
             style: TextStyle(
-              fontSize: 12,
-              color: color,
-              fontWeight: FontWeight.w600,
+              fontSize: 16,
+              color: Colors.grey[700],
             ),
             textAlign: TextAlign.center,
           ),
@@ -398,80 +603,60 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildActionCard(String title, String subtitle, IconData icon,
-      Color color, VoidCallback onTap) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 32),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-                textAlign: TextAlign.center,
+  Widget _buildActionCard(
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 40,
+              color: color,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
               ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey[600],
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
               ),
-            ],
-          ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
-  }
-
-  void _handleBottomNavigation(int index) {
-    switch (index) {
-      case 0:
-        // Already on home
-        break;
-      case 1:
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const AdminStudentList(),
-          ),
-        );
-        break;
-      case 2:
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const AdminAttendanceList(),
-          ),
-        );
-        break;
-      case 3:
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const AdminScheduleScreen(),
-          ),
-        );
-        break;
-    }
   }
 
   void _showLogoutDialog() {

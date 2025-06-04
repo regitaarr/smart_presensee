@@ -82,6 +82,28 @@ class _AdminUserListState extends State<AdminUserList> {
     }
   }
 
+  Future<void> _updateUser(
+      String userId, Map<String, dynamic> updatedData) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('pengguna')
+          .doc(userId)
+          .update(updatedData);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Data pengguna berhasil diperbarui'),
+            backgroundColor: Colors.green),
+      );
+      _loadUsers();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Gagal memperbarui data pengguna: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
   void _showDeleteDialog(String userId, String nama) {
     showDialog(
       context: context,
@@ -100,6 +122,97 @@ class _AdminUserListState extends State<AdminUserList> {
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditDialog(Map<String, dynamic> user) {
+    final TextEditingController namaController =
+        TextEditingController(text: user['nama']);
+    final TextEditingController emailController =
+        TextEditingController(text: user['email']);
+    final TextEditingController nipController =
+        TextEditingController(text: user['nip'] ?? '');
+    String selectedRole = user['role'] ?? '';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Pengguna'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: namaController,
+                decoration: const InputDecoration(
+                  labelText: 'Nama',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: emailController,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: selectedRole,
+                decoration: const InputDecoration(
+                  labelText: 'Role',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                  DropdownMenuItem(
+                      value: 'wali kelas', child: Text('Wali Kelas')),
+                  DropdownMenuItem(value: 'guru', child: Text('Guru')),
+                ],
+                onChanged: (value) {
+                  selectedRole = value!;
+                },
+              ),
+              if (selectedRole == 'wali kelas') ...[
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nipController,
+                  decoration: const InputDecoration(
+                    labelText: 'NIP',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Map<String, dynamic> updatedData = {
+                'nama': namaController.text,
+                'email': emailController.text,
+                'role': selectedRole,
+              };
+
+              if (selectedRole == 'wali kelas') {
+                updatedData['nip'] = nipController.text;
+              }
+
+              Navigator.of(context).pop();
+              _updateUser(user['id'], updatedData);
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4CAF50)),
+            child: const Text('Simpan', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -186,12 +299,23 @@ class _AdminUserListState extends State<AdminUserList> {
                                     Text('NIP: ${user['nip'] ?? '-'}'),
                                 ],
                               ),
-                              trailing: IconButton(
-                                icon:
-                                    const Icon(Icons.delete, color: Colors.red),
-                                tooltip: 'Hapus Pengguna',
-                                onPressed: () => _showDeleteDialog(
-                                    user['id'], user['nama'] ?? '-'),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit,
+                                        color: Color(0xFF4CAF50)),
+                                    tooltip: 'Edit Pengguna',
+                                    onPressed: () => _showEditDialog(user),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.red),
+                                    tooltip: 'Hapus Pengguna',
+                                    onPressed: () => _showDeleteDialog(
+                                        user['id'], user['nama'] ?? '-'),
+                                  ),
+                                ],
                               ),
                             ),
                           );

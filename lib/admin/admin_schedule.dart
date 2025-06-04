@@ -833,30 +833,21 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF4CAF50),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF4CAF50),
-        elevation: 0,
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-        ),
-        title: const Text(
-          'Kelola Jadwal Pelajaran',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
         centerTitle: true,
+        title: const Text(
+          'Daftar Jadwal',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: const Color(0xFF4CAF50),
+        foregroundColor: Colors.white,
         actions: [
-          // Debug button (hapus setelah testing selesai)
           IconButton(
-            onPressed: () => _showDebugInfo(),
-            icon: const Icon(Icons.bug_report, color: Colors.white),
-            tooltip: 'Debug Info',
-          ),
-          IconButton(
-            onPressed: () => _showAddEditScheduleDialog(),
-            icon: const Icon(Icons.add, color: Colors.white),
-            tooltip: 'Tambah Jadwal',
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadScheduleData,
+            tooltip: 'Refresh Data',
           ),
         ],
+        automaticallyImplyLeading: false,
       ),
       body: Column(
         children: [
