@@ -5,6 +5,7 @@ import 'package:smart_presensee/screens/signup_screen.dart';
 import 'package:smart_presensee/screens/forgot_password_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'dart:developer';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -459,18 +460,18 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         return;
       }
 
-      final userData = userQuery.docs.first.data() as Map<String, dynamic>;
+      final userDoc = userQuery.docs.first;
+      final userData = userDoc.data() as Map<String, dynamic>;
       final String storedPassword = userData['password'] ?? '';
       final String userName = userData['nama'] ?? userData['name'] ?? 'User';
       final String userRole = userData['role'] ?? 'user';
+      final String userId = userDoc.id;
 
       if (password == storedPassword) {
         _showSuccessToast('Login berhasil!');
 
         if (mounted) {
-          // Navigate based on user role
           if (userRole.toLowerCase() == 'admin') {
-            // Navigate to Admin Dashboard
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => AdminDashboard(
@@ -479,14 +480,41 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 ),
               ),
             );
-          } else {
-            // Navigate to regular user dashboard (walikelas, etc.)
+          } else if (userRole.toLowerCase() == 'walikelas') {
+            String? walikelasNip;
+            try {
+              final QuerySnapshot walikelasQuery = await FirebaseFirestore
+                  .instance
+                  .collection('walikelas')
+                  .where('id_pengguna', isEqualTo: userId)
+                  .limit(1)
+                  .get();
+              if (walikelasQuery.docs.isNotEmpty) {
+                walikelasNip = (walikelasQuery.docs.first.data()
+                    as Map<String, dynamic>)?['nip'];
+              }
+            } catch (e) {
+              log('Error fetching walikelas data: $e');
+            }
+
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => DashboardPage(
                   userName: userName,
                   userEmail: email,
-                  idPengguna: '',
+                  idPengguna: userId,
+                  userNip: walikelasNip,
+                ),
+              ),
+            );
+          } else {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => DashboardPage(
+                  userName: userName,
+                  userEmail: email,
+                  idPengguna: userId,
+                  userNip: null,
                 ),
               ),
             );

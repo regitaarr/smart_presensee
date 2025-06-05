@@ -535,6 +535,17 @@ class _ProfileScreenState extends State<ProfileScreen>
             value: userData?['email'] ?? 'Tidak tersedia',
             color: const Color(0xFF81C784),
           ),
+          // Add WhatsApp number for 'walikelas' role
+          if (userData?['role'] == 'walikelas' &&
+              userData?['whatsapp'] != null) ...[
+            const SizedBox(height: 16),
+            _buildModernInfoCard(
+              icon: Icons.phone_outlined,
+              label: 'Nomor WhatsApp',
+              value: userData?['whatsapp'] ?? 'Tidak tersedia',
+              color: const Color(0xFF81C784),
+            ),
+          ],
           const SizedBox(height: 16),
           _buildModernInfoCard(
             icon: Icons.class_outlined,
@@ -816,6 +827,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         TextEditingController(text: walkelasData?['nip'] ?? '');
     final TextEditingController kelasController =
         TextEditingController(text: walkelasData?['kelasku'] ?? '');
+    final TextEditingController whatsappController =
+        TextEditingController(text: userData?['whatsapp'] ?? '');
 
     showDialog(
       context: context,
@@ -840,45 +853,83 @@ class _ProfileScreenState extends State<ProfileScreen>
                   icon: Icons.person,
                 ),
                 const SizedBox(height: 16),
-                _buildDialogTextField(
-                  controller: nipController,
-                  label: 'NIP',
-                  icon: Icons.badge,
-                  maxLength: 18,
-                ),
-                const SizedBox(height: 16),
-                _buildDialogTextField(
-                  controller: kelasController,
-                  label: 'Kelas yang Diampu',
-                  icon: Icons.class_,
-                  maxLength: 2,
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8F5E8),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: const Color(0xFF81C784).withOpacity(0.3)),
+                // Show NIP, Kelas, WhatsApp, and info message only for 'walikelas'
+                if (userData?['role'] == 'walikelas') ...[
+                  _buildDialogTextField(
+                    controller: nipController,
+                    label: 'NIP',
+                    icon: Icons.badge,
+                    maxLength: 18,
                   ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline,
-                          color: Color(0xFF2E7D32), size: 20),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'NIP dan Kelas akan disimpan di data walikelas',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF2E7D32),
+                  const SizedBox(height: 16),
+                  _buildDialogTextField(
+                    controller: kelasController,
+                    label: 'Kelas yang Diampu',
+                    icon: Icons.class_,
+                    maxLength: 2,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDialogTextField(
+                    controller: whatsappController,
+                    label: 'Nomor WhatsApp',
+                    icon: Icons.phone_android,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E8),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: const Color(0xFF81C784).withOpacity(0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            color: Color(0xFF2E7D32), size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'NIP, Kelas, dan Nomor WhatsApp akan disimpan',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF2E7D32),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                ] else ...[
+                  // Info message for other roles
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E8),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: const Color(0xFF81C784).withOpacity(0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            color: Color(0xFF2E7D32), size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Anda dapat mengubah Nama Lengkap saja.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
               ],
             ),
           ),
@@ -904,19 +955,28 @@ class _ProfileScreenState extends State<ProfileScreen>
                     _showSnackBar('Nama minimal 2 karakter', isError: true);
                     return;
                   }
-                  if (nipController.text.trim().length > 18) {
-                    _showSnackBar('NIP maksimal 18 karakter', isError: true);
-                    return;
-                  }
-                  if (kelasController.text.trim().length > 2) {
-                    _showSnackBar('Kelas maksimal 2 karakter', isError: true);
-                    return;
+                  if (userData?['role'] == 'walikelas') {
+                    if (nipController.text.trim().length > 18) {
+                      _showSnackBar('NIP maksimal 18 karakter', isError: true);
+                      return;
+                    }
+                    if (kelasController.text.trim().length > 2) {
+                      _showSnackBar('Kelas maksimal 2 karakter', isError: true);
+                      return;
+                    }
                   }
 
                   await _updateProfile(
                     nama: namaController.text.trim(),
-                    nip: nipController.text.trim(),
-                    kelas: kelasController.text.trim(),
+                    nip: userData?['role'] == 'walikelas'
+                        ? nipController.text.trim()
+                        : null,
+                    kelas: userData?['role'] == 'walikelas'
+                        ? kelasController.text.trim()
+                        : null,
+                    whatsapp: userData?['role'] == 'walikelas'
+                        ? whatsappController.text.trim()
+                        : null,
                   );
                   if (mounted) Navigator.of(context).pop();
                 },
@@ -939,10 +999,12 @@ class _ProfileScreenState extends State<ProfileScreen>
     required String label,
     required IconData icon,
     int? maxLength,
+    TextInputType? keyboardType,
   }) {
     return TextFormField(
       controller: controller,
       maxLength: maxLength,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: const Color(0xFF81C784)),
@@ -1105,12 +1167,13 @@ class _ProfileScreenState extends State<ProfileScreen>
   // Keep existing update methods but add modern styling for success messages
   Future<void> _updateProfile({
     required String nama,
-    required String nip,
-    required String kelas,
+    String? nip,
+    String? kelas,
+    String? whatsapp,
   }) async {
     try {
       log('Starting profile update...');
-      log('Nama: $nama, NIP: $nip, Kelas: $kelas');
+      log('Nama: $nama, NIP: $nip, Kelas: $kelas, WhatsApp: $whatsapp');
       log('User ID Pengguna: $userIdPengguna');
 
       if (userIdPengguna == null) {
@@ -1136,7 +1199,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
         log('Updated pengguna collection');
 
-        await _updateWalikelasData(nip, kelas);
+        await _updateWalikelasData(nip, kelas, whatsapp);
 
         _showSnackBar('Profil berhasil diperbarui');
         _loadUserProfile();
@@ -1147,14 +1210,15 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  Future<void> _updateWalikelasData(String nip, String kelas) async {
+  Future<void> _updateWalikelasData(
+      String? nip, String? kelas, String? whatsapp) async {
     try {
-      if (nip.isEmpty && kelas.isEmpty) {
+      if (nip == null && kelas == null && whatsapp == null) {
         await _deleteWalikelasData();
         return;
       }
 
-      if (nip.isEmpty || kelas.isEmpty) {
+      if (nip == null || kelas == null) {
         throw Exception(
             'NIP dan Kelas harus diisi bersamaan atau dikosongkan bersamaan');
       }
@@ -1174,6 +1238,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             .update({
           'nip': nip,
           'kelasku': kelas,
+          'whatsapp': whatsapp,
           'updated_at': FieldValue.serverTimestamp(),
         });
 
@@ -1183,6 +1248,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           'nip': nip,
           'id_pengguna': userIdPengguna,
           'kelasku': kelas,
+          'whatsapp': whatsapp,
           'created_at': FieldValue.serverTimestamp(),
         });
 

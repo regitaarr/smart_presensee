@@ -170,7 +170,7 @@ class _AdminUserListState extends State<AdminUserList> {
                 items: const [
                   DropdownMenuItem(value: 'admin', child: Text('Admin')),
                   DropdownMenuItem(
-                      value: 'wali kelas', child: Text('Wali Kelas')),
+                      value: 'walikelas', child: Text('Wali Kelas')),
                   DropdownMenuItem(value: 'guru', child: Text('Guru')),
                 ],
                 onChanged: (value) {

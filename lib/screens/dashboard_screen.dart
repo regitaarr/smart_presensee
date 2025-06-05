@@ -10,12 +10,15 @@ import 'dart:developer';
 class DashboardPage extends StatefulWidget {
   final String userName;
   final String userEmail;
+  final String idPengguna;
+  final String? userNip;
 
   const DashboardPage({
     super.key,
     required this.userName,
     required this.userEmail,
-    required String idPengguna,
+    required this.idPengguna,
+    this.userNip,
   });
 
   @override
@@ -146,10 +149,14 @@ class _DashboardScreenState extends State<DashboardPage>
       log('Loading attendance statistics for: ${today.toIso8601String().substring(0, 10)}');
 
       // Get all students first
-      QuerySnapshot studentSnapshot = await FirebaseFirestore.instance
-          .collection('siswa')
-          .orderBy('nama_siswa')
-          .get();
+      Query studentQuery = FirebaseFirestore.instance.collection('siswa');
+
+      // Filter students by NIP if user is walikelas
+      if (widget.userNip != null) {
+        studentQuery = studentQuery.where('nip', isEqualTo: widget.userNip);
+      }
+
+      QuerySnapshot studentSnapshot = await studentQuery.get();
 
       log('Found ${studentSnapshot.docs.length} students');
 
@@ -158,57 +165,53 @@ class _DashboardScreenState extends State<DashboardPage>
         'sakit': 0,
         'izin': 0,
         'alpha': 0,
-        'total':
-            0, // Will be updated with count of students with 'hadir' status
+        'total': studentSnapshot.docs.length,
       };
 
-      // Get all attendance records for today
-      QuerySnapshot attendanceSnapshot =
-          await FirebaseFirestore.instance.collection('presensi').get();
+      // Get attendance records for today
+      Query attendanceQuery = FirebaseFirestore.instance.collection('presensi');
 
-      log('Found ${attendanceSnapshot.docs.length} attendance records');
+      // Filter attendance records for today
+      attendanceQuery = attendanceQuery
+          .where('tanggal_waktu',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(
+                  DateTime(today.year, today.month, today.day)))
+          .where('tanggal_waktu',
+              isLessThanOrEqualTo: Timestamp.fromDate(
+                  DateTime(today.year, today.month, today.day, 23, 59, 59)));
 
-      // Process each student
-      for (var studentDoc in studentSnapshot.docs) {
-        String nisn = studentDoc.id;
-        String status = 'alpha'; // Default status
+      QuerySnapshot attendanceSnapshot = await attendanceQuery.get();
 
-        // Check attendance records for this student
-        for (var attendanceDoc in attendanceSnapshot.docs) {
-          Map<String, dynamic> attendanceData =
-              attendanceDoc.data() as Map<String, dynamic>;
+      log('Found ${attendanceSnapshot.docs.length} attendance records for today');
 
-          if (attendanceData['nisn'] == nisn &&
-              attendanceData['tanggal_waktu'] != null) {
-            DateTime recordDate =
-                (attendanceData['tanggal_waktu'] as Timestamp).toDate();
+      // Create a set of NISN for students filtered by NIP
+      Set<String> relevantStudentNisns =
+          studentSnapshot.docs.map((doc) => doc.id).toSet();
 
-            // Check if record is for today
-            if (_isSameDay(recordDate, today)) {
-              status = attendanceData['status'] ?? 'alpha';
-              break;
-            }
-          }
+      // Process each attendance record
+      for (var attendanceDoc in attendanceSnapshot.docs) {
+        Map<String, dynamic> attendanceData =
+            attendanceDoc.data() as Map<String, dynamic>;
+
+        String nisn = attendanceData['nisn'] ?? '';
+        String status = attendanceData['status'] ?? 'alpha';
+
+        // Only count attendance for relevant students
+        if (relevantStudentNisns.contains(nisn)) {
+          stats[status] = (stats[status] ?? 0) + 1;
         }
-
-        // Update statistics
-        if (stats.containsKey(status)) {
-          stats[status] = stats[status]! + 1;
-          // Update total only for students with 'hadir' status
-          if (status == 'hadir') {
-            stats['total'] = stats['total']! + 1;
-          }
-        }
-
-        log('Student $nisn status: $status');
       }
+
+      // Calculate alpha (students without attendance records)
+      int totalMarked = stats['hadir']! + stats['sakit']! + stats['izin']!;
+      stats['alpha'] = stats['total']! - totalMarked;
+
+      log('Attendance stats: $stats');
 
       setState(() {
         attendanceStats = stats;
         isLoadingAttendance = false;
       });
-
-      log('Attendance statistics loaded: $attendanceStats');
     } catch (e) {
       log('Error loading attendance statistics: $e');
       setState(() {
@@ -226,10 +229,16 @@ class _DashboardScreenState extends State<DashboardPage>
       String currentDay = _getCurrentDay();
       log('Loading schedule for: $currentDay');
 
-      QuerySnapshot scheduleSnapshot = await FirebaseFirestore.instance
+      Query scheduleQuery = FirebaseFirestore.instance
           .collection('jadwal')
-          .where('hari', isEqualTo: currentDay)
-          .get();
+          .where('hari', isEqualTo: currentDay);
+
+      // Filter schedule by NIP if user is walikelas
+      if (widget.userNip != null) {
+        scheduleQuery = scheduleQuery.where('nip', isEqualTo: widget.userNip);
+      }
+
+      QuerySnapshot scheduleSnapshot = await scheduleQuery.get();
 
       log('Found ${scheduleSnapshot.docs.length} schedules for today');
 
@@ -1166,8 +1175,10 @@ class _DashboardScreenState extends State<DashboardPage>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) =>
-                        AttendanceScreen(userEmail: widget.userEmail),
+                    builder: (context) => AttendanceScreen(
+                      userEmail: widget.userEmail,
+                      userNip: widget.userNip,
+                    ),
                   ),
                 ).then((_) {
                   setState(() {
@@ -1179,7 +1190,9 @@ class _DashboardScreenState extends State<DashboardPage>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const ScheduleScreen(),
+                    builder: (context) => ScheduleScreen(
+                      userNip: widget.userNip,
+                    ),
                   ),
                 ).then((_) {
                   _loadTodaySchedule();

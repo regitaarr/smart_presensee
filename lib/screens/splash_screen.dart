@@ -12,7 +12,6 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
   bool _showFirstImage = true;
 
   @override
@@ -25,16 +24,15 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
     );
 
-    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller)
-      ..addListener(() {
-        setState(() {});
-      })
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          _showFirstImage = !_showFirstImage;
-          _controller.reset();
-        }
-      });
+    _controller.addListener(() {
+      setState(() {});
+    });
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _showFirstImage = !_showFirstImage;
+        _controller.reset();
+      }
+    });
 
     // Start image switching animation
     Timer.periodic(const Duration(seconds: 2), (timer) {
@@ -43,7 +41,7 @@ class _SplashScreenState extends State<SplashScreen>
       }
     });
 
-    // Navigate to login screen after 5 seconds
+    // Navigate to login screen after 5 seconds (web dan mobile sama)
     Timer(const Duration(seconds: 5), () {
       Navigator.pushReplacement(
         context,

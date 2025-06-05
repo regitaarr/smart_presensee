@@ -15,10 +15,12 @@ import 'package:share_plus/share_plus.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final String userEmail;
+  final String? userNip; // Add userNip parameter
 
   const AttendanceScreen({
     super.key,
     required this.userEmail,
+    this.userNip, // Make userNip optional
   });
 
   @override
@@ -122,11 +124,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
       log('=== MULAI LOAD DATA SISWA ===');
 
-      // Load semua siswa dari collection 'siswa'
-      QuerySnapshot studentSnapshot = await FirebaseFirestore.instance
-          .collection('siswa')
-          .orderBy('nama_siswa')
-          .get();
+      // Load siswa from collection 'siswa'
+      Query studentQuery = FirebaseFirestore.instance.collection('siswa');
+
+      // Filter students by NIP if user is walikelas
+      if (widget.userNip != null) {
+        studentQuery = studentQuery.where('nip', isEqualTo: widget.userNip);
+      }
+
+      QuerySnapshot studentSnapshot = await studentQuery.get();
 
       log('Jumlah siswa ditemukan: ${studentSnapshot.docs.length}');
 

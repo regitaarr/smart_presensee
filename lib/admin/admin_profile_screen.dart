@@ -30,7 +30,6 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
       QuerySnapshot userQuery = await FirebaseFirestore.instance
           .collection('pengguna')
           .where('email', isEqualTo: widget.adminEmail)
-          .where('role', isEqualTo: 'admin')
           .limit(1)
           .get();
       if (userQuery.docs.isNotEmpty) {
@@ -129,7 +128,6 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                 QuerySnapshot userQuery = await FirebaseFirestore.instance
                     .collection('pengguna')
                     .where('email', isEqualTo: widget.adminEmail)
-                    .where('role', isEqualTo: 'admin')
                     .limit(1)
                     .get();
                 if (userQuery.docs.isNotEmpty) {
@@ -372,6 +370,17 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
             value: adminData?['email'] ?? 'Tidak tersedia',
             color: const Color(0xFF81C784),
           ),
+          // Add WhatsApp number for 'walikelas' role
+          if (adminData?['role'] == 'walikelas' &&
+              adminData?['whatsapp'] != null) ...[
+            const SizedBox(height: 16),
+            _buildModernInfoCard(
+              icon: Icons.phone_outlined,
+              label: 'Nomor WhatsApp',
+              value: adminData?['whatsapp'] ?? 'Tidak tersedia',
+              color: const Color(0xFF81C784),
+            ),
+          ],
         ],
       ),
     );

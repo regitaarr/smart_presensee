@@ -3,7 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:developer';
 
 class ScheduleScreen extends StatefulWidget {
-  const ScheduleScreen({super.key});
+  final String? userNip;
+
+  const ScheduleScreen({super.key, this.userNip});
 
   @override
   State<ScheduleScreen> createState() => _ScheduleScreenState();
@@ -77,8 +79,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
       log('=== LOADING SCHEDULE DATA ===');
 
-      QuerySnapshot scheduleSnapshot =
-          await FirebaseFirestore.instance.collection('jadwal').get();
+      Query scheduleQuery = FirebaseFirestore.instance.collection('jadwal');
+
+      if (widget.userNip != null) {
+        scheduleQuery = scheduleQuery.where('nip', isEqualTo: widget.userNip);
+        log('Filtering schedule by NIP: ${widget.userNip}');
+      }
+
+      QuerySnapshot scheduleSnapshot = await scheduleQuery.get();
 
       log('Found ${scheduleSnapshot.docs.length} schedule records');
 
