@@ -388,7 +388,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             _buildModernTextField(
                               controller: _newPasswordController,
                               label: 'Password Baru',
-                              hint: 'Masukkan password baru',
+                              hint: 'Masukkan password baru Anda',
                               isPassword: true,
                               keyboardType: TextInputType.text,
                             ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smart_presensee/screens/login_screen.dart';
 import 'dart:developer';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userEmail;
@@ -535,15 +536,15 @@ class _ProfileScreenState extends State<ProfileScreen>
             value: userData?['email'] ?? 'Tidak tersedia',
             color: const Color(0xFF81C784),
           ),
-          // Add WhatsApp number for 'walikelas' role
-          if (userData?['role'] == 'walikelas' &&
-              userData?['whatsapp'] != null) ...[
+          // Add WhatsApp number card
+          if (userData?['whatsapp'] != null &&
+              userData!['whatsapp'].isNotEmpty) ...[
             const SizedBox(height: 16),
             _buildModernInfoCard(
-              icon: Icons.phone_outlined,
+              icon: MdiIcons.whatsapp,
               label: 'Nomor WhatsApp',
               value: userData?['whatsapp'] ?? 'Tidak tersedia',
-              color: const Color(0xFF81C784),
+              color: const Color(0xFF25D366),
             ),
           ],
           const SizedBox(height: 16),
@@ -553,6 +554,18 @@ class _ProfileScreenState extends State<ProfileScreen>
             value: walkelasData?['kelasku'] ?? 'Belum diisi',
             color: const Color(0xFFFF8A65),
           ),
+          // If needed, add other relevant fields here like jurusan if not part of kelasku
+          if (userData?['role'] == 'walikelas' &&
+              walkelasData != null &&
+              walkelasData?['jurusan'] != null) ...[
+            const SizedBox(height: 16),
+            _buildModernInfoCard(
+              icon: Icons.assignment_outlined,
+              label: 'Jurusan',
+              value: walkelasData!['jurusan'] ?? 'Tidak tersedia',
+              color: const Color(0xFF7E57C2),
+            ),
+          ],
         ],
       ),
     );
