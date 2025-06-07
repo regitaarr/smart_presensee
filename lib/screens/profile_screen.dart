@@ -201,49 +201,22 @@ class _ProfileScreenState extends State<ProfileScreen>
                   padding: const EdgeInsets.all(24),
                   child: Row(
                     children: [
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.arrow_back,
-                            color: Color(0xFF2E7D32),
-                            size: 24,
-                          ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(
+                          Icons.arrow_back,
+                          color: Color(0xFF2E7D32),
+                          size: 24,
                         ),
                       ),
-                      const SizedBox(width: 16),
                       const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Profil Saya',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF2E7D32),
-                              ),
-                            ),
-                            Text(
-                              'Kelola informasi profil Anda',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF6B7280),
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          'Profil Saya',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2E7D32),
+                          ),
                         ),
                       ),
                       // Refresh button
@@ -1207,12 +1180,12 @@ class _ProfileScreenState extends State<ProfileScreen>
             .doc(docId)
             .update({
           'nama': nama,
-          'updated_at': FieldValue.serverTimestamp(),
+          'whatsapp': whatsapp,
         });
 
         log('Updated pengguna collection');
 
-        await _updateWalikelasData(nip, kelas, whatsapp);
+        await _updateWalikelasData(nip, kelas);
 
         _showSnackBar('Profil berhasil diperbarui');
         _loadUserProfile();
@@ -1223,10 +1196,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  Future<void> _updateWalikelasData(
-      String? nip, String? kelas, String? whatsapp) async {
+  Future<void> _updateWalikelasData(String? nip, String? kelas) async {
     try {
-      if (nip == null && kelas == null && whatsapp == null) {
+      if (nip == null && kelas == null) {
         await _deleteWalikelasData();
         return;
       }
@@ -1251,18 +1223,15 @@ class _ProfileScreenState extends State<ProfileScreen>
             .update({
           'nip': nip,
           'kelasku': kelas,
-          'whatsapp': whatsapp,
-          'updated_at': FieldValue.serverTimestamp(),
         });
 
         log('Updated existing walikelas record: $walkelasDocId');
       } else {
+        // Create a new document using NIP as the document ID
         await FirebaseFirestore.instance.collection('walikelas').doc(nip).set({
           'nip': nip,
           'id_pengguna': userIdPengguna,
           'kelasku': kelas,
-          'whatsapp': whatsapp,
-          'created_at': FieldValue.serverTimestamp(),
         });
 
         log('Created new walikelas record with NIP: $nip');

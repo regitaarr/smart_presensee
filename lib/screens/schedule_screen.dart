@@ -209,7 +209,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        centerTitle: true,
+        titleSpacing: 0,
         actions: [
           IconButton(
             onPressed: _loadScheduleData,

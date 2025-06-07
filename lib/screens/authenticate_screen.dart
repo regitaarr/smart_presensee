@@ -136,10 +136,6 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
       log('Checking attendance for NISN: $nisn on ${now.toString().substring(0, 10)}');
 
-      // First get the document ID for today's date
-      String todayDocId =
-          '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-
       // Query with a single field first
       QuerySnapshot existingRecords = await FirebaseFirestore.instance
           .collection('presensi')
@@ -313,24 +309,10 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                     children: [
                       GestureDetector(
                         onTap: () => Navigator.of(context).pop(),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.arrow_back,
-                            color: Color(0xFF2E7D32),
-                            size: 22,
-                          ),
+                        child: const Icon(
+                          Icons.arrow_back,
+                          color: Color(0xFF2E7D32),
+                          size: 22,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -340,18 +322,11 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Presensi Wajah',
+                              'Presensi Face Recognition',
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF2E7D32),
-                              ),
-                            ),
-                            Text(
-                              'Scan wajah untuk presensi',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Color(0xFF6B7280),
                               ),
                             ),
                           ],
@@ -412,7 +387,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     const Text(
-                                      'Tanggal Hari Ini',
+                                      'Hari Ini',
                                       style: TextStyle(
                                         fontSize: 16,
                                         color: Colors.white,
@@ -540,11 +515,11 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   }
 
   _fetchUsersAndMatchFace() {
-    log('🔍 Starting face matching process...');
+    log('Starting face matching process...');
 
     // ignore: body_might_complete_normally_catch_error
     FirebaseFirestore.instance.collection("wajah_siswa").get().catchError((e) {
-      log("❌ Getting User Error: $e");
+      log("Getting User Error: $e");
       setState(() => isMatching = false);
       showToast(
           "Terjadi kesalahan saat mengambil data wajah!. Silahkan coba lagi",
@@ -552,7 +527,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     }).then((snap) async {
       if (snap.docs.isNotEmpty) {
         users.clear();
-        log('📊 Total wajah terdaftar: ${snap.docs.length}');
+        log('Total wajah terdaftar: ${snap.docs.length}');
 
         for (var doc in snap.docs) {
           UserModel user = UserModel.fromJson(doc.data());
@@ -577,7 +552,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
           users.add([user, 1.0]);
         }
 
-        log('✅ Total users loaded for comparison: ${users.length}');
+        log('Total users loaded for comparison: ${users.length}');
         _matchFaces();
       } else {
         _showFailureDialog(
@@ -589,7 +564,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   }
 
   _matchFaces() async {
-    log('🔄 Starting face matching with ${users.length} candidates...');
+    log('Starting face matching with ${users.length} candidates...');
 
     bool faceMatched = false;
     double highestSimilarity = 0.0;
@@ -613,7 +588,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
         if (split!.matchedFaces.isNotEmpty) {
           double similarity = split.matchedFaces[0]!.similarity! * 100;
-          log("📊 Face similarity for ${(user.first as UserModel).nisn}: $similarity%");
+          log("Face similarity for ${(user.first as UserModel).nisn}: $similarity%");
 
           if (similarity > highestSimilarity) {
             highestSimilarity = similarity;
@@ -623,10 +598,10 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
           if (similarity > 85.00) {
             faceMatched = true;
             loggingUser = user.first;
-            log('✅ Face matched for user: ${loggingUser?.name}, NISN: ${loggingUser?.nisn}');
+            log('Face matched for user: ${loggingUser?.name}, NISN: ${loggingUser?.nisn}');
 
             // Save attendance for the matched user
-            log('💾 Attempting to save attendance record...');
+            log('Attempting to save attendance record...');
             bool attendanceSaved = await _saveAttendanceRecord(loggingUser!);
 
             setState(() {
@@ -635,7 +610,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
             });
 
             if (attendanceSaved) {
-              log('✅ Attendance saved, navigating to success screen');
+              log('Attendance saved, navigating to success screen');
               if (mounted) {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -647,7 +622,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                 );
               }
             } else {
-              log('❌ Failed to save attendance, showing error');
+              log('Failed to save attendance, showing error');
               _showFailureDialog(
                 title: "Gagal Menyimpan Presensi",
                 description:
@@ -658,7 +633,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
           }
         }
       } catch (e) {
-        log('❌ Error during face matching: $e');
+        log('Error during face matching: $e');
         continue; // Continue with next user instead of breaking
       }
     }
@@ -818,6 +793,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
               fontWeight: FontWeight.bold,
               color: Color(0xFFEF4444),
             ),
+            textAlign: TextAlign.center,
           ),
           content: Text(
             description,
@@ -995,8 +971,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
           Text(
             '1. Posisikan wajah di tengah kamera\n'
             '2. Pastikan pencahayaan cukup\n'
-            '3. Hindari menggunakan masker\n'
-            '4. Tekan tombol setelah wajah terdeteksi',
+            '3. Hindari menggunakan masker dan kacamata\n',
             style: TextStyle(
               fontSize: 16,
               color: Color(0xFF6B7280),
@@ -1029,6 +1004,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       performanceMode: FaceDetectorMode.accurate,
     ),
   );
+  // ignore: unused_field
   FaceFeatures? _faceFeatures;
   var image1 = regula.MatchFacesImage();
   var image2 = regula.MatchFacesImage();
@@ -1036,7 +1012,6 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   final TextEditingController _nameController = TextEditingController();
 
   bool _canAuthenticate = false;
-  String _similarity = "";
   List<dynamic> users = [];
   bool userExists = false;
   UserModel? loggingUser;

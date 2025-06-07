@@ -1,5 +1,3 @@
-// ignore_for_file: unused_local_variable, unused_element
-
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -205,10 +203,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       DateTime endOfDay = DateTime(
           selectedDate.year, selectedDate.month, selectedDate.day, 23, 59, 59);
 
-      log('🔍 Checking attendance for NISN: $nisn');
-      log('📅 Selected date: ${selectedDate.toIso8601String().substring(0, 10)}');
-      log('⏰ Start of day: ${startOfDay.toIso8601String()}');
-      log('⏰ End of day: ${endOfDay.toIso8601String()}');
+      log('Checking attendance for NISN: $nisn');
+      log('Selected date: ${selectedDate.toIso8601String().substring(0, 10)}');
+      log('Start of day: ${startOfDay.toIso8601String()}');
+      log('End of day: ${endOfDay.toIso8601String()}');
 
       // Pertama, cek semua data presensi untuk NISN ini (tanpa filter tanggal)
       QuerySnapshot allAttendance = await FirebaseFirestore.instance
@@ -216,12 +214,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           .where('nisn', isEqualTo: nisn)
           .get();
 
-      log('📊 Total attendance records for NISN $nisn: ${allAttendance.docs.length}');
+      log('Total attendance records for NISN $nisn: ${allAttendance.docs.length}');
 
       // Debug: Print semua data presensi
       for (var doc in allAttendance.docs) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        log('📝 Record: ${doc.id}');
+        log('Record: ${doc.id}');
         log('   - NISN: ${data['nisn']}');
         log('   - Status: ${data['status']}');
         log('   - Tanggal: ${data['tanggal_waktu']}');
@@ -238,7 +236,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           .where('nisn', isEqualTo: nisn)
           .get(); // Hapus filter tanggal dulu, kita filter manual
 
-      log('🔎 Filtering records manually...');
+      log('Filtering records manually...');
 
       for (var doc in attendanceSnapshot.docs) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
@@ -248,17 +246,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           // Check apakah tanggal sama
           if (_isSameDay(recordDate, selectedDate)) {
             String status = data['status'] ?? 'alpha';
-            log('✅ Found matching attendance for $nisn: $status');
-            log('📅 Record date: ${recordDate.toIso8601String()}');
+            log('Found matching attendance for $nisn: $status');
+            log('Record date: ${recordDate.toIso8601String()}');
             return status;
           }
         }
       }
 
-      log('❌ No attendance found for $nisn on selected date');
+      log('No attendance found for $nisn on selected date');
       return 'alpha';
     } catch (e) {
-      log('💥 Error getting attendance status for $nisn: $e');
+      log('Error getting attendance status for $nisn: $e');
       return 'alpha';
     }
   }
@@ -476,11 +474,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> _saveQuickManualAttendance(String nisn, String status) async {
     try {
       // Check if attendance already exists for selected date
-      DateTime startOfDay = DateTime(
-          selectedDate.year, selectedDate.month, selectedDate.day, 0, 0, 0);
-      DateTime endOfDay = DateTime(
-          selectedDate.year, selectedDate.month, selectedDate.day, 23, 59, 59);
-
       QuerySnapshot existingAttendance = await FirebaseFirestore.instance
           .collection('presensi')
           .where('nisn', isEqualTo: nisn)
@@ -587,20 +580,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         isLoading = true;
       });
 
-      // Get all students' attendance for the selected date
-      DateTime startOfDay = DateTime(
-          selectedDate.year, selectedDate.month, selectedDate.day, 0, 0, 0);
-      DateTime endOfDay = DateTime(
-          selectedDate.year, selectedDate.month, selectedDate.day, 23, 59, 59);
+      // Get the latest report ID
+      final latestReport = await FirebaseFirestore.instance
+          .collection('laporan')
+          .orderBy('id_laporan', descending: true)
+          .limit(1)
+          .get();
+
+      String newId;
+      if (latestReport.docs.isEmpty) {
+        newId = 'idlpmi0001';
+      } else {
+        final lastId = latestReport.docs.first['id_laporan'];
+        final lastNumber = int.parse(lastId.substring(5));
+        newId = 'idlpmi${(lastNumber + 1).toString().padLeft(4, '0')}';
+      }
 
       // Query all attendance records for the selected date
-      QuerySnapshot attendanceSnapshot = await FirebaseFirestore.instance
-          .collection('presensi')
-          .where('tanggal_waktu',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-          .where('tanggal_waktu',
-              isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
-          .get();
+      QuerySnapshot attendanceSnapshot =
+          await FirebaseFirestore.instance.collection('presensi').get();
 
       // Get all students
       QuerySnapshot studentSnapshot = await FirebaseFirestore.instance
@@ -690,12 +688,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       String filename =
           'laporan_kehadiran_${_formatDateForFilename(selectedDate)}.csv';
 
+      // Save report data to Firestore
+      await FirebaseFirestore.instance.collection('laporan').doc(newId).set({
+        'id_laporan': newId,
+        'tanggal_laporan': Timestamp.fromDate(selectedDate),
+        'file_laporan': filename,
+      });
+
       if (kIsWeb) {
         // Web platform
         final bytes = utf8.encode(csv);
         final blob = html.Blob([bytes]);
         final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
+        html.AnchorElement(href: url)
           ..setAttribute('download', filename)
           ..click();
         html.Url.revokeObjectUrl(url);
@@ -740,15 +745,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF4CAF50),
         elevation: 0,
+        centerTitle: false,
         leading: IconButton(
           onPressed: () => Navigator.of(context).pop(),
           icon: const Icon(Icons.arrow_back, color: Colors.white),
         ),
-        title: const Text(
-          'Daftar Kehadiran Siswa',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        titleSpacing: 0,
+        title: const Padding(
+          padding: EdgeInsets.only(left: 1),
+          child: Text(
+            'Daftar Kehadiran Siswa',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.left,
+          ),
         ),
-        centerTitle: true,
         actions: [
           IconButton(
             onPressed: _downloadDailyReport,
@@ -1191,37 +1201,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ],
                     ),
                   ),
-                  // Status indicator
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: statusColors[student.todayAttendanceStatus]!
-                          .withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: statusColors[student.todayAttendanceStatus]!),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          statusIcons[student.todayAttendanceStatus],
-                          size: 16,
-                          color: statusColors[student.todayAttendanceStatus],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          student.todayAttendanceStatus.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: statusColors[student.todayAttendanceStatus],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // Status indicator has been removed
                 ],
               ),
               const SizedBox(height: 12),
@@ -1677,7 +1657,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         final bytes = utf8.encode(csv);
         final blob = html.Blob([bytes]);
         final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
+        html.AnchorElement(href: url)
           ..setAttribute('download', filename)
           ..click();
         html.Url.revokeObjectUrl(url);
@@ -1761,7 +1741,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         isLoading = true;
       });
 
-      log('🔍 Loading attendance history for NISN: ${widget.student.nisn}');
+      log('Loading attendance history for NISN: ${widget.student.nisn}');
 
       // Query collection presensi berdasarkan NISN
       QuerySnapshot snapshot = await FirebaseFirestore.instance
@@ -1769,14 +1749,14 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
           .where('nisn', isEqualTo: widget.student.nisn)
           .get(); // Hapus orderBy dulu untuk debugging
 
-      log('📊 Found ${snapshot.docs.length} attendance records');
+      log('Found ${snapshot.docs.length} attendance records');
 
       List<AttendanceRecord> tempList = [];
       for (var doc in snapshot.docs) {
         try {
           Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-          log('📝 Processing record: ${doc.id}');
+          log('Processing record: ${doc.id}');
           log('   - Data: $data');
 
           if (data['tanggal_waktu'] != null) {
@@ -1792,12 +1772,12 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
               metode: metode,
             ));
 
-            log('   ✅ Added: $status on ${recordDate.toIso8601String()}');
+            log('Added: $status on ${recordDate.toIso8601String()}');
           } else {
-            log('   ❌ No tanggal_waktu field found');
+            log('No tanggal_waktu field found');
           }
         } catch (e) {
-          log('   💥 Error processing record ${doc.id}: $e');
+          log('Error processing record ${doc.id}: $e');
         }
       }
 
@@ -1810,9 +1790,9 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         isLoading = false;
       });
 
-      log('✅ Successfully loaded ${tempList.length} attendance records');
+      log('Successfully loaded ${tempList.length} attendance records');
     } catch (e) {
-      log('💥 Error loading attendance history: $e');
+      log('Error loading attendance history: $e');
       setState(() {
         isLoading = false;
       });
@@ -2074,7 +2054,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         );
       }
     } catch (e) {
-      log('💥 Error handling attendance action: $e');
+      log('Error handling attendance action: $e');
 
       if (mounted) {
         setState(() {
@@ -2095,11 +2075,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   // Create new manual attendance
   Future<void> _createManualAttendance(String status, DateTime dateTime) async {
     // Check if attendance already exists for this date
-    DateTime startOfDay =
-        DateTime(dateTime.year, dateTime.month, dateTime.day, 0, 0, 0);
-    DateTime endOfDay =
-        DateTime(dateTime.year, dateTime.month, dateTime.day, 23, 59, 59);
-
     QuerySnapshot existingAttendance = await FirebaseFirestore.instance
         .collection('presensi')
         .where('nisn', isEqualTo: widget.student.nisn)
@@ -2133,7 +2108,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       'created_at': FieldValue.serverTimestamp(),
     });
 
-    log('✅ Created manual attendance: $attendanceId');
+    log('Created manual attendance: $attendanceId');
   }
 
   // Update existing attendance
@@ -2149,7 +2124,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       'updated_at': FieldValue.serverTimestamp(),
     });
 
-    log('✅ Updated attendance: ${record.id}');
+    log('Updated attendance: ${record.id}');
   }
 
   // Delete attendance record
@@ -2159,7 +2134,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         .doc(record.id)
         .delete();
 
-    log('✅ Deleted attendance: ${record.id}');
+    log('Deleted attendance: ${record.id}');
   }
 
   // Generate manual attendance ID
@@ -2257,13 +2232,20 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF4CAF50),
         elevation: 0,
+        centerTitle: false,
         leading: IconButton(
           onPressed: () => Navigator.of(context).pop(),
           icon: const Icon(Icons.arrow_back, color: Colors.white),
         ),
-        title: const Text('Riwayat Presensi',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        centerTitle: true,
+        titleSpacing: 0,
+        title: const Padding(
+          padding: EdgeInsets.only(left: 1),
+          child: Text(
+            'Daftar Kehadiran Siswa',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.left,
+          ),
+        ),
         actions: [
           IconButton(
             onPressed: _downloadDailyReport,

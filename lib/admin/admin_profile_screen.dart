@@ -14,11 +14,28 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
   bool isLoading = true;
   Map<String, dynamic>? adminData;
   String? errorMessage;
+  final TextEditingController _nikController = TextEditingController();
+  String? adminId;
+  String? adminNIK;
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _whatsappController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  bool _isEditing = false;
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
     super.initState();
     _loadAdminProfile();
+  }
+
+  @override
+  void dispose() {
+    _nikController.dispose();
+    _nameController.dispose();
+    _whatsappController.dispose();
+    _emailController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadAdminProfile() async {
@@ -35,8 +52,12 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
       if (userQuery.docs.isNotEmpty) {
         setState(() {
           adminData = userQuery.docs.first.data() as Map<String, dynamic>;
+          adminId = userQuery.docs.first.id;
           isLoading = false;
         });
+
+        // Load existing NIK if available
+        await _loadAdminNIK();
       } else {
         setState(() {
           errorMessage = 'Data admin tidak ditemukan';
@@ -48,6 +69,92 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
         errorMessage = 'Terjadi kesalahan: $e';
         isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadAdminNIK() async {
+    try {
+      QuerySnapshot adminQuery = await FirebaseFirestore.instance
+          .collection('admin')
+          .where('id_pengguna', isEqualTo: adminId)
+          .limit(1)
+          .get();
+
+      if (adminQuery.docs.isNotEmpty) {
+        Map<String, dynamic> adminData =
+            adminQuery.docs.first.data() as Map<String, dynamic>;
+        setState(() {
+          adminNIK = adminData['nik'] ?? '';
+          _nikController.text = adminData['nik'] ?? '';
+        });
+      }
+    } catch (e) {
+      print('Error loading admin NIK: $e');
+    }
+  }
+
+  Future<void> _saveNIK() async {
+    if (_nikController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('NIK tidak boleh kosong'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_nikController.text.trim().length != 16) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('NIK harus 16 digit'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      String nik = _nikController.text.trim();
+      QuerySnapshot existingAdmin = await FirebaseFirestore.instance
+          .collection('admin')
+          .where('id_pengguna', isEqualTo: adminId)
+          .limit(1)
+          .get();
+
+      if (existingAdmin.docs.isNotEmpty) {
+        // Update existing admin record
+        await FirebaseFirestore.instance
+            .collection('admin')
+            .doc(existingAdmin.docs.first.id)
+            .update({
+          'nik': nik,
+        });
+      } else {
+        // Create new admin record using NIK as document ID
+        await FirebaseFirestore.instance.collection('admin').doc(nik).set({
+          'id_pengguna': adminId,
+          'nik': nik,
+        });
+      }
+
+      setState(() {
+        adminNIK = nik;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('NIK berhasil disimpan'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menyimpan NIK: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -341,9 +448,16 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -351,65 +465,63 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
           const Text(
             'Informasi Profil',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: Color(0xFF2D3748),
             ),
           ),
-          const SizedBox(height: 20),
-          _buildModernInfoCard(
+          const SizedBox(height: 24),
+          _buildInfoCard(
             icon: Icons.person_outline,
-            label: 'Nama Lengkap',
-            value: adminData?['nama'] ?? 'Tidak tersedia',
-            color: const Color(0xFF81C784),
+            title: 'Nama Lengkap',
+            value: adminData?['nama'] ?? 'Belum diisi',
           ),
           const SizedBox(height: 16),
-          _buildModernInfoCard(
+          _buildInfoCard(
             icon: Icons.email_outlined,
-            label: 'Email',
-            value: adminData?['email'] ?? 'Tidak tersedia',
-            color: const Color(0xFF81C784),
+            title: 'Email',
+            value: adminData?['email'] ?? 'Belum diisi',
           ),
-          // Add WhatsApp number for 'walikelas' role
-          if (adminData?['role'] == 'walikelas' &&
-              adminData?['whatsapp'] != null) ...[
-            const SizedBox(height: 16),
-            _buildModernInfoCard(
-              icon: Icons.phone_outlined,
-              label: 'Nomor WhatsApp',
-              value: adminData?['whatsapp'] ?? 'Tidak tersedia',
-              color: const Color(0xFF81C784),
-            ),
-          ],
+          const SizedBox(height: 16),
+          _buildInfoCard(
+            icon: Icons.badge_outlined,
+            title: 'NIK',
+            value: adminNIK ?? 'Belum diisi',
+          ),
+          const SizedBox(height: 16),
+          _buildInfoCard(
+            icon: Icons.phone_outlined,
+            title: 'WhatsApp',
+            value: adminData?['whatsapp'] ?? 'Belum diisi',
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildModernInfoCard({
+  Widget _buildInfoCard({
     required IconData icon,
-    required String label,
+    required String title,
     required String value,
-    required Color color,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: Colors.grey.withOpacity(0.2)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: Colors.grey.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               icon,
-              color: color,
+              color: Colors.grey,
               size: 24,
             ),
           ),
@@ -419,7 +531,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label,
+                  title,
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[600],
@@ -446,6 +558,14 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
   Widget _buildActionButtons() {
     return Column(
       children: [
+        _buildModernActionButton(
+          icon: Icons.edit_outlined,
+          title: 'Edit Profil',
+          subtitle: 'Ubah nama, NIK, email, dan whatsapp',
+          gradient: const [Color(0xFF4FC3F7), Color(0xFF29B6F6)],
+          onTap: _showEditProfileDialog,
+        ),
+        const SizedBox(height: 16),
         _buildModernActionButton(
           icon: Icons.lock_outline,
           title: 'Ubah Kata Sandi',
@@ -530,5 +650,170 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
         ),
       ),
     );
+  }
+
+  void _showEditProfileDialog() {
+    _nameController.text = adminData?['nama'] ?? '';
+    _nikController.text = adminNIK ?? '';
+    _whatsappController.text = adminData?['whatsapp'] ?? '';
+    _emailController.text = adminData?['email'] ?? '';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Profil'),
+        content: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: 'Nama Lengkap',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    prefixIcon: const Icon(Icons.person),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Nama tidak boleh kosong';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _emailController,
+                  decoration: InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    prefixIcon: const Icon(Icons.email),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Email tidak boleh kosong';
+                    }
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                        .hasMatch(value)) {
+                      return 'Email tidak valid';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _nikController,
+                  decoration: InputDecoration(
+                    labelText: 'NIK',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    prefixIcon: const Icon(Icons.badge),
+                  ),
+                  keyboardType: TextInputType.number,
+                  maxLength: 16,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'NIK tidak boleh kosong';
+                    }
+                    if (value.length != 16) {
+                      return 'NIK harus 16 digit';
+                    }
+                    if (!RegExp(r'^\d+$').hasMatch(value)) {
+                      return 'NIK harus berupa angka';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _whatsappController,
+                  decoration: InputDecoration(
+                    labelText: 'WhatsApp',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    prefixIcon: const Icon(Icons.phone),
+                  ),
+                  keyboardType: TextInputType.phone,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'WhatsApp tidak boleh kosong';
+                    }
+                    if (!RegExp(r'^\d+$').hasMatch(value)) {
+                      return 'WhatsApp harus berupa angka';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (_formKey.currentState!.validate()) {
+                _updateProfile();
+                Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+            ),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateProfile() async {
+    try {
+      // Update pengguna collection
+      await FirebaseFirestore.instance
+          .collection('pengguna')
+          .doc(adminId)
+          .update({
+        'nama': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'whatsapp': _whatsappController.text.trim(),
+      });
+
+      // Update admin collection
+      final nik = _nikController.text.trim();
+      await FirebaseFirestore.instance.collection('admin').doc(nik).set({
+        'nik': nik,
+        'id_pengguna': adminId,
+      });
+
+      setState(() {
+        adminNIK = nik;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profil berhasil diperbarui'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memperbarui profil: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

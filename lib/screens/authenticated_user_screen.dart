@@ -202,7 +202,7 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        centerTitle: true,
+        titleSpacing: 0,
       ),
       body: SafeArea(
         child: Column(
@@ -247,7 +247,7 @@ class _AuthenticatedUserScreenState extends State<AuthenticatedUserScreen> {
 
                     // Greeting text
                     Text(
-                      "HAI, ${studentName ?? widget.user.name}!",
+                      "Halo, ${studentName ?? widget.user.name}!",
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 24,
