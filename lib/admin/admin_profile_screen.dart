@@ -227,6 +227,8 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     _nikController.text = adminNIK ?? '';
     final TextEditingController whatsappController =
         TextEditingController(text: adminData?['whatsapp'] ?? '');
+    final TextEditingController emailController =
+        TextEditingController(text: adminData?['email'] ?? '');
 
     showDialog(
       context: context,
@@ -249,6 +251,20 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                   controller: namaController,
                   label: 'Nama Lengkap',
                   icon: Icons.person,
+                ),
+                const SizedBox(height: 16),
+                _buildDialogTextField(
+                  controller: emailController,
+                  label: 'Email',
+                  icon: Icons.email,
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 16),
+                _buildDialogTextField(
+                  controller: whatsappController,
+                  label: 'Nomor WhatsApp',
+                  icon: Icons.phone_android,
+                  keyboardType: TextInputType.phone,
                 ),
                 const SizedBox(height: 16),
                 // Add NIK field for admin role
@@ -278,13 +294,6 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                     label: 'Kelas yang Diampu',
                     icon: Icons.class_,
                     maxLength: 2,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildDialogTextField(
-                    controller: whatsappController,
-                    label: 'Nomor WhatsApp',
-                    icon: Icons.phone_android,
-                    keyboardType: TextInputType.phone,
                   ),
                   const SizedBox(height: 16),
                   Container(
@@ -329,7 +338,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Anda dapat mengubah Nama Lengkap, NIK, dan Nomor WhatsApp.',
+                            'Anda dapat mengubah Nama Lengkap, Email, NIK, dan Nomor WhatsApp.',
                             style: TextStyle(
                               fontSize: 12,
                               color: Color(0xFF2E7D32),
@@ -357,7 +366,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Anda dapat mengubah Nama Lengkap dan Nomor WhatsApp.',
+                            'Anda dapat mengubah Nama Lengkap, Email, dan Nomor WhatsApp.',
                             style: TextStyle(
                               fontSize: 12,
                               color: Color(0xFF2E7D32),
@@ -396,6 +405,17 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                     return;
                   }
 
+                  // Validate Email
+                  if (emailController.text.trim().isEmpty) {
+                    _showSnackBar('Email tidak boleh kosong', isError: true);
+                    return;
+                  }
+                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                      .hasMatch(emailController.text.trim())) {
+                    _showSnackBar('Format email tidak valid', isError: true);
+                    return;
+                  }
+
                   // Handle NIK update for admin role
                   if (adminData?['role'] == 'admin') {
                     if (_nikController.text.trim().isEmpty) {
@@ -412,9 +432,10 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                     }
                   }
 
-                  // Other profile fields update (nama and whatsapp)
+                  // Other profile fields update (nama, email and whatsapp)
                   await _updateProfile(
                     nama: namaController.text.trim(),
+                    email: emailController.text.trim(),
                     whatsapp: whatsappController.text.trim(),
                   );
 
@@ -515,11 +536,12 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
 
   Future<void> _updateProfile({
     required String nama,
+    required String email,
     String? whatsapp,
   }) async {
     try {
       print('Starting profile update...');
-      print('Nama: $nama, WhatsApp: $whatsapp');
+      print('Nama: $nama, Email: $email, WhatsApp: $whatsapp');
       print('Admin ID: $adminId');
 
       if (adminId == null) {
@@ -540,6 +562,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
             .doc(docId)
             .update({
           'nama': nama,
+          'email': email,
           'whatsapp': whatsapp,
         });
 
