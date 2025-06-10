@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+// ignore: unused_import
 import 'dart:developer' as developer;
 
 class AdminFaceList extends StatefulWidget {
@@ -11,113 +12,108 @@ class AdminFaceList extends StatefulWidget {
 
 class _AdminFaceListState extends State<AdminFaceList> {
   bool isLoading = true;
-  List<Map<String, dynamic>> faceList = [];
-  List<Map<String, dynamic>> filteredFaceList = [];
-  String searchQuery = '';
-  String selectedClass = 'Semua';
-
-  final List<String> classOptions = [
-    '1a',
-    '1b',
-    '2a',
-    '2b',
-    '3a',
-    '3b',
-    '4a',
-    '4b',
-    '5a',
-    '5b',
-    '6a',
-    '6b'
+  List<Map<String, dynamic>> faces = [];
+  List<Map<String, dynamic>> filteredFaces = [];
+  final TextEditingController _searchController = TextEditingController();
+  String? _selectedClass;
+  final List<String> _classList = [
+    '1A',
+    '1B',
+    '2A',
+    '2B',
+    '3A',
+    '3B',
+    '4A',
+    '4B',
+    '5A',
+    '5B',
+    '6A',
+    '6B'
   ];
 
   @override
   void initState() {
     super.initState();
-    _loadFaceData();
+    _loadFaces();
   }
 
-  Future<void> _loadFaceData() async {
-    try {
-      setState(() {
-        isLoading = true;
-      });
-
-      // Get all registered faces
-      QuerySnapshot faceSnapshot =
-          await FirebaseFirestore.instance.collection('wajah_siswa').get();
-
-      List<Map<String, dynamic>> tempList = [];
-      for (var doc in faceSnapshot.docs) {
-        Map<String, dynamic> faceData = doc.data() as Map<String, dynamic>;
-
-        // Get student data
-        DocumentSnapshot studentDoc = await FirebaseFirestore.instance
-            .collection('siswa')
-            .doc(faceData['nisn'])
-            .get();
-
-        if (studentDoc.exists) {
-          Map<String, dynamic> studentData =
-              studentDoc.data() as Map<String, dynamic>;
-          faceData['nama_siswa'] = studentData['nama_siswa'];
-          faceData['kelas_sw'] = studentData['kelas_sw'];
-          faceData['jenis_kelamin'] = studentData['jenis_kelamin'];
-          tempList.add(faceData);
-        }
-      }
-
-      setState(() {
-        faceList = tempList;
-        _applyFilters();
-        isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
-      developer.log('Error loading face data: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error loading face data: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
-  void _applyFilters() {
+  void _filterFaces(String query) {
     setState(() {
-      filteredFaceList = faceList.where((face) {
-        bool matchesSearch = face['nama_siswa']
-            .toString()
-            .toLowerCase()
-            .contains(searchQuery.toLowerCase());
-        bool matchesClass = selectedClass == 'Semua' ||
-            face['kelas_sw'].toString().toLowerCase() ==
-                selectedClass.toLowerCase();
-        return matchesSearch && matchesClass;
+      filteredFaces = faces.where((face) {
+        final name = face['nama_siswa']?.toString().toLowerCase() ?? '';
+        final nisn = face['nisn']?.toString().toLowerCase() ?? '';
+        final kelas = _formatClass(face['kelas_sw']).toLowerCase();
+        final matchesQuery = name.contains(query.toLowerCase()) ||
+            nisn.contains(query.toLowerCase());
+        final matchesClass =
+            _selectedClass == null || kelas == _selectedClass!.toLowerCase();
+        return matchesQuery && matchesClass;
       }).toList();
     });
   }
 
-  List<String> _getUniqueClasses() {
-    return ['Semua', ...classOptions];
-  }
+  Future<void> _loadFaces() async {
+    setState(() {
+      isLoading = true;
+    });
+    try {
+      final faceSnapshot =
+          await FirebaseFirestore.instance.collection('wajah_siswa').get();
+      List<Map<String, dynamic>> tempList = [];
+      for (var doc in faceSnapshot.docs) {
+        Map<String, dynamic> faceData = doc.data();
+        String nisn = faceData['nisn'] ?? '';
 
-  String _formatGender(String? gender) {
-    if (gender == null) return '-';
-    return gender.toLowerCase() == 'l' ? 'Laki-laki' : 'Perempuan';
+        if (nisn.isNotEmpty) {
+          final studentDoc = await FirebaseFirestore.instance
+              .collection('siswa')
+              .doc(nisn)
+              .get();
+          if (studentDoc.exists) {
+            Map<String, dynamic> studentData =
+                studentDoc.data() as Map<String, dynamic>;
+            faceData['nama_siswa'] = studentData['nama_siswa'];
+            faceData['kelas_sw'] = studentData['kelas_sw'];
+            faceData['jenis_kelamin'] = studentData['jenis_kelamin'];
+          }
+        }
+        tempList.add(faceData);
+      }
+      faces = tempList;
+      _filterFaces(_searchController.text);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Gagal memuat data wajah: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   String _formatClass(String? kelas) {
-    if (kelas == null || kelas.isEmpty) return '-';
-    if (kelas.length >= 2) {
-      final number = kelas.substring(0, kelas.length - 1);
-      final letter = kelas.substring(kelas.length - 1).toUpperCase();
-      return '$number$letter';
-    }
-    return kelas.toUpperCase();
+    if (kelas == null) return 'Kelas tidak tersedia';
+    return kelas.replaceAll('_', ' ').toUpperCase();
+  }
+
+  String _formatGender(String? gender) {
+    if (gender == null) return 'Tidak tersedia';
+    if (gender.toUpperCase() == 'L') return 'Laki-laki';
+    if (gender.toUpperCase() == 'P') return 'Perempuan';
+    return 'Tidak tersedia';
   }
 
   @override
@@ -126,7 +122,7 @@ class _AdminFaceListState extends State<AdminFaceList> {
       appBar: AppBar(
         centerTitle: true,
         title: const Text(
-          'Data Wajah Terdaftar',
+          'Daftar Data Wajah',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: const Color(0xFF4CAF50),
@@ -134,7 +130,7 @@ class _AdminFaceListState extends State<AdminFaceList> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadFaceData,
+            onPressed: _loadFaces,
             tooltip: 'Refresh Data',
           ),
         ],
@@ -158,6 +154,7 @@ class _AdminFaceListState extends State<AdminFaceList> {
               children: [
                 // Search Bar
                 TextField(
+                  controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Cari berdasarkan nama...',
                     prefixIcon: const Icon(Icons.search),
@@ -171,8 +168,7 @@ class _AdminFaceListState extends State<AdminFaceList> {
                   ),
                   onChanged: (value) {
                     setState(() {
-                      searchQuery = value;
-                      _applyFilters();
+                      _filterFaces(value);
                     });
                   },
                 ),
@@ -186,21 +182,27 @@ class _AdminFaceListState extends State<AdminFaceList> {
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
-                      value: selectedClass,
+                      value: _selectedClass,
+                      hint: const Text('Semua Kelas'),
+                      underline: const SizedBox(),
                       isExpanded: true,
-                      items: _getUniqueClasses().map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: 'Semua Kelas',
+                          child: Text('Semua Kelas'),
+                        ),
+                        ..._classList.map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                      ],
                       onChanged: (String? newValue) {
-                        if (newValue != null) {
-                          setState(() {
-                            selectedClass = newValue;
-                            _applyFilters();
-                          });
-                        }
+                        setState(() {
+                          _selectedClass = newValue;
+                          _filterFaces(_searchController.text);
+                        });
                       },
                     ),
                   ),
@@ -218,7 +220,7 @@ class _AdminFaceListState extends State<AdminFaceList> {
                           AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
                     ),
                   )
-                : filteredFaceList.isEmpty
+                : filteredFaces.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -242,9 +244,9 @@ class _AdminFaceListState extends State<AdminFaceList> {
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.all(16),
-                        itemCount: filteredFaceList.length,
+                        itemCount: filteredFaces.length,
                         itemBuilder: (context, index) {
-                          final face = filteredFaceList[index];
+                          final face = filteredFaces[index];
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
                             elevation: 2,

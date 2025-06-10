@@ -185,7 +185,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               _buildMenuItem(
                 icon: Icons.person,
-                title: 'Daftar Pengguna',
+                title: 'Data Pengguna',
                 index: 5,
               ),
               _buildMenuItem(
@@ -531,13 +531,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               _buildActionCard(
                 'Kelola Jadwal',
-                'Atur jadwal pelajaran',
+                'Atur jadwal mata pelajaran',
                 Icons.schedule,
                 Colors.orangeAccent,
                 () => setState(() => _selectedIndex = 3),
               ),
               _buildActionCard(
-                'Daftar Pengguna',
+                'Data Pengguna',
                 'Lihat semua pengguna',
                 Icons.supervised_user_circle,
                 Colors.blueGrey,

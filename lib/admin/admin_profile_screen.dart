@@ -17,9 +17,11 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
   final TextEditingController _nikController = TextEditingController();
   String? adminId;
   String? adminNIK;
+  String? adminDocId;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _whatsappController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  // ignore: unused_field
   bool _isEditing = false;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
@@ -86,6 +88,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
         setState(() {
           adminNIK = adminData['nik'] ?? '';
           _nikController.text = adminData['nik'] ?? '';
+          adminDocId = adminQuery.docs.first.id;
         });
       }
     } catch (e) {
@@ -115,31 +118,49 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     }
 
     try {
-      String nik = _nikController.text.trim();
-      QuerySnapshot existingAdmin = await FirebaseFirestore.instance
+      String newNik = _nikController.text.trim();
+
+      // Step 1: Query for all existing admin documents associated with this adminId
+      QuerySnapshot existingAdminQuery = await FirebaseFirestore.instance
           .collection('admin')
           .where('id_pengguna', isEqualTo: adminId)
-          .limit(1)
           .get();
 
-      if (existingAdmin.docs.isNotEmpty) {
-        // Update existing admin record
+      // Step 2: Delete any old NIK documents for this adminId that are not the new NIK
+      for (var doc in existingAdminQuery.docs) {
+        if (doc['nik'] != newNik) {
+          await FirebaseFirestore.instance
+              .collection('admin')
+              .doc(doc.id)
+              .delete();
+        }
+      }
+
+      // Step 3: Check if a document with the new NIK as its ID already exists
+      DocumentSnapshot newNikDoc = await FirebaseFirestore.instance
+          .collection('admin')
+          .doc(newNik)
+          .get();
+
+      if (newNikDoc.exists) {
+        // If a document with the new NIK as ID exists, update it
         await FirebaseFirestore.instance
             .collection('admin')
-            .doc(existingAdmin.docs.first.id)
+            .doc(newNik)
             .update({
-          'nik': nik,
+          'id_pengguna': adminId,
+          'nik': newNik,
         });
       } else {
-        // Create new admin record using NIK as document ID
-        await FirebaseFirestore.instance.collection('admin').doc(nik).set({
+        // If no document with the new NIK as ID exists, create a new one
+        await FirebaseFirestore.instance.collection('admin').doc(newNik).set({
           'id_pengguna': adminId,
-          'nik': nik,
+          'nik': newNik,
         });
       }
 
       setState(() {
-        adminNIK = nik;
+        adminNIK = newNik;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(

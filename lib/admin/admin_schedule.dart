@@ -388,7 +388,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                         counterText: '',
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
 
                     // NIP Input
                     TextFormField(
@@ -405,7 +405,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                         FilteringTextInputFormatter.digitsOnly,
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
 
                     // Kelas dropdown
                     DropdownButtonFormField<String>(
@@ -426,7 +426,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                         });
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
 
                     // Display Wali Kelas NIP if available
                     if (classTeachers[selectedKelas] != null)
@@ -466,7 +466,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                           ],
                         ),
                       ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
 
                     // Hari dropdown
                     DropdownButtonFormField<String>(
@@ -487,7 +487,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                         });
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
 
                     // Jam Mulai Time Picker
                     Container(
@@ -535,7 +535,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
 
                     // Jam Selesai Time Picker
                     Container(
@@ -831,124 +831,140 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF4CAF50),
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        centerTitle: true,
         title: const Text(
-          'Daftar Jadwal',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: const Color(0xFF4CAF50),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadScheduleData,
-            tooltip: 'Refresh Data',
+          'Daftar Jadwal Mata Pelajaran',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
-        ],
-        automaticallyImplyLeading: false,
+        ),
+        centerTitle: true,
+        backgroundColor: const Color(0xFF4CAF50),
+        elevation: 0,
       ),
       body: Column(
         children: [
-          // Search and filters
           Container(
-            margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFF4CAF50),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
+              ),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5)
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
               ],
             ),
             child: Column(
               children: [
-                // Search bar
-                TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Cari mata pelajaran atau kelas...',
-                    prefixIcon:
-                        const Icon(Icons.search, color: Color(0xFF4CAF50)),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
+                // Search Bar
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 5,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Cari jadwal...',
+                      prefixIcon:
+                          const Icon(Icons.search, color: Color(0xFF4CAF50)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF4CAF50)),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
                   ),
                 ),
-                const SizedBox(height: 12),
-
+                const SizedBox(height: 16),
                 // Filters
                 Row(
                   children: [
-                    // Day filter
                     Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: selectedDayFilter,
-                        decoration: InputDecoration(
-                          labelText: 'Hari',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text('Semua Hari'),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedDayFilter,
+                            hint: const Text('Hari'),
+                            isExpanded: true,
+                            icon: const Icon(Icons.calendar_today,
+                                color: Color(0xFF4CAF50)),
+                            items: [
+                              const DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('Semua Hari'),
+                              ),
+                              ...dayOptions
+                                  .map((day) => DropdownMenuItem<String>(
+                                        value: day,
+                                        child: Text(dayLabels[day] ?? day),
+                                      )),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                selectedDayFilter = value;
+                                _applyFilters();
+                              });
+                            },
                           ),
-                          ...dayOptions.map((day) => DropdownMenuItem<String>(
-                                value: day,
-                                child: Text(dayLabels[day]!),
-                              )),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            selectedDayFilter = value;
-                            _applyFilters();
-                          });
-                        },
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
-
-                    // Class filter
                     Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: selectedClassFilter,
-                        decoration: InputDecoration(
-                          labelText: 'Kelas',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text('Semua Kelas'),
-                          ),
-                          ...classOptions
-                              .map((kelas) => DropdownMenuItem<String>(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedClassFilter,
+                            hint: const Text('Kelas'),
+                            isExpanded: true,
+                            icon: const Icon(Icons.class_,
+                                color: Color(0xFF4CAF50)),
+                            items: [
+                              const DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('Semua Kelas'),
+                              ),
+                              ...classOptions.map((kelas) =>
+                                  DropdownMenuItem<String>(
                                     value: kelas,
-                                    child: Text(kelas.toUpperCase()),
+                                    child: Text('Kelas ${kelas.toUpperCase()}'),
                                   )),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            selectedClassFilter = value;
-                            _applyFilters();
-                          });
-                        },
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                selectedClassFilter = value;
+                                _applyFilters();
+                              });
+                            },
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -956,175 +972,184 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
               ],
             ),
           ),
-
-          // Error message display
-          if (errorMessage != null)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.red.shade100,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.error, color: Colors.red),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: Text(errorMessage!,
-                          style: const TextStyle(color: Colors.red))),
-                  TextButton(
-                      onPressed: _loadScheduleData, child: const Text('Retry')),
-                ],
-              ),
-            ),
-
-          // Summary Card
-          if (!isLoading && filteredScheduleList.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5)
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildSummaryItem('Total Jadwal',
-                      filteredScheduleList.length.toString(), Colors.blue),
-                  _buildSummaryItem(
-                      'Hari Ini',
-                      filteredScheduleList
-                          .where((s) =>
-                              s.hari.toLowerCase() ==
-                              _getCurrentDay().toLowerCase())
-                          .length
-                          .toString(),
-                      Colors.green),
-                ],
-              ),
-            ),
-
-          // Schedule list
           Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: isLoading
-                  ? const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text('Memuat data jadwal...'),
-                        ],
-                      ),
-                    )
-                  : errorMessage != null
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.error,
-                                  size: 64, color: Colors.red),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Error memuat data',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.red,
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+                    ),
+                  )
+                : errorMessage != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 48,
+                              color: Colors.red[400],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              errorMessage!,
+                              style: TextStyle(
+                                color: Colors.red[400],
+                                fontSize: 16,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : filteredScheduleList.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.schedule,
+                                  size: 48,
+                                  color: Colors.grey[400],
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                errorMessage!,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey,
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Tidak ada jadwal yang ditemukan',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 16,
+                                  ),
                                 ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: _loadScheduleData,
-                                child: const Text('Coba Lagi'),
-                              ),
-                            ],
-                          ),
-                        )
-                      : scheduleList.isEmpty
-                          ? _buildEmptyState()
-                          : filteredScheduleList.isEmpty
-                              ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: filteredScheduleList.length,
+                            itemBuilder: (context, index) {
+                              final schedule = filteredScheduleList[index];
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: ListTile(
+                                  contentPadding: const EdgeInsets.all(16),
+                                  leading: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF4CAF50)
+                                          .withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      Icons.schedule,
+                                      color: const Color(0xFF4CAF50),
+                                      size: 24,
+                                    ),
+                                  ),
+                                  title: Text(
+                                    schedule.mataPelajaran,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      const Icon(Icons.search_off,
-                                          size: 64, color: Colors.grey),
-                                      const SizedBox(height: 16),
-                                      const Text(
-                                        'Tidak ada jadwal sesuai filter',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          color: Colors.grey,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
                                       const SizedBox(height: 8),
-                                      Text(
-                                        'Total jadwal: ${scheduleList.length}',
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey,
-                                        ),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.class_,
+                                            size: 16,
+                                            color: Colors.grey[600],
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Kelas ${schedule.kelas.toUpperCase()}',
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(height: 16),
-                                      ElevatedButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            selectedDayFilter = null;
-                                            selectedClassFilter = null;
-                                            _searchController.clear();
-                                            searchQuery = '';
-                                            _applyFilters();
-                                          });
-                                        },
-                                        child: const Text('Reset Filter'),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.calendar_today,
+                                            size: 16,
+                                            color: Colors.grey[600],
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            dayLabels[schedule.hari
+                                                    .toLowerCase()] ??
+                                                schedule.hari,
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.access_time,
+                                            size: 16,
+                                            color: Colors.grey[600],
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '${_formatTimeOfDay(schedule.jamMulai)} - ${_formatTimeOfDay(schedule.jamSelesai)}',
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
-                                )
-                              : RefreshIndicator(
-                                  onRefresh: _loadScheduleData,
-                                  child: ListView.builder(
-                                    padding: const EdgeInsets.all(16),
-                                    itemCount: filteredScheduleList.length,
-                                    itemBuilder: (context, index) {
-                                      final schedule =
-                                          filteredScheduleList[index];
-                                      return _buildScheduleCard(schedule);
-                                    },
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit,
+                                            color: Color(0xFF4CAF50)),
+                                        onPressed: () =>
+                                            _editSchedule(schedule),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete,
+                                            color: Colors.red),
+                                        onPressed: () =>
+                                            _deleteSchedule(schedule),
+                                      ),
+                                    ],
                                   ),
                                 ),
-            ),
+                              );
+                            },
+                          ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddEditScheduleDialog(),
+        onPressed: _addNewSchedule,
         backgroundColor: const Color(0xFF4CAF50),
-        tooltip: 'Tambah Jadwal',
-        child: const Icon(Icons.add, color: Colors.white),
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -1328,6 +1353,14 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
       'minggu'
     ];
     return days[DateTime.now().weekday - 1];
+  }
+
+  void _editSchedule(ScheduleModel schedule) {
+    _showAddEditScheduleDialog(schedule: schedule);
+  }
+
+  void _addNewSchedule() {
+    _showAddEditScheduleDialog();
   }
 }
 

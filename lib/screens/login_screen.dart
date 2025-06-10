@@ -491,12 +491,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                   .get();
               if (walikelasQuery.docs.isNotEmpty) {
                 walikelasNip = (walikelasQuery.docs.first.data()
-                    as Map<String, dynamic>)?['nip'];
+                    as Map<String, dynamic>)['nip'];
               }
             } catch (e) {
               log('Error fetching walikelas data: $e');
             }
 
+            // ignore: use_build_context_synchronously
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => DashboardPage(
