@@ -111,81 +111,155 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
       return;
     }
 
-    // Load data if not already loaded for the selected date
-    if (attendanceData.isEmpty && errorMessage == null) {
-      await _loadAttendanceDataForSelectedDate();
+    try {
+      // Load data if not already loaded for the selected date
+      if (attendanceData.isEmpty && errorMessage == null) {
+        await _loadAttendanceDataForSelectedDate();
+        if (attendanceData.isEmpty) {
+          _showToast(errorMessage ?? 'Tidak ada data untuk tanggal ini.');
+          return;
+        }
+      }
       if (attendanceData.isEmpty) {
+        // Check again after loading attempt
         _showToast(errorMessage ?? 'Tidak ada data untuk tanggal ini.');
         return;
       }
-    }
-    if (attendanceData.isEmpty) {
-      // Check again after loading attempt
-      _showToast(errorMessage ?? 'Tidak ada data untuk tanggal ini.');
-      return;
-    }
 
-    log('Generating CSV for date: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}');
+      log('Generating CSV for date: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}');
 
-    List<List<dynamic>> csvData = [
-      // CSV Header
-      ['ID Presensi', 'NISN', 'Status', 'Tanggal & Waktu'],
-    ];
+      List<List<dynamic>> csvData = [
+        // CSV Header
+        ['ID Presensi', 'NISN', 'Status', 'Tanggal & Waktu'],
+      ];
 
-    for (var record in attendanceData) {
-      String idPresensi = record['id_presensi'] ?? '-';
-      String nisn = record['nisn'] ?? '-';
-      String status = record['status'] ?? '-';
-      Timestamp? timestamp = record['tanggal_waktu'] as Timestamp?;
+      for (var record in attendanceData) {
+        String idPresensi = record['id_presensi'] ?? '-';
+        String nisn = record['nisn'] ?? '-';
+        String status = record['status'] ?? '-';
+        Timestamp? timestamp = record['tanggal_waktu'] as Timestamp?;
 
-      String tanggalWaktu = timestamp != null
-          ? DateFormat('yyyy-MM-dd HH:mm:ss').format(timestamp.toDate())
-          : '-';
+        String tanggalWaktu = timestamp != null
+            ? DateFormat('yyyy-MM-dd HH:mm:ss').format(timestamp.toDate())
+            : '-';
 
-      csvData.add([idPresensi, nisn, status, tanggalWaktu]);
-    }
-
-    String csvString = const ListToCsvConverter().convert(csvData);
-
-    // Generate filename laporan_kehadiran_DDMMYY.csv (using the selected date)
-    String formattedDateFilename = DateFormat('ddMMyy').format(_selectedDate);
-    String filename = 'laporan_kehadiran_$formattedDateFilename.csv';
-
-    log('CSV generated. Attempting to download/share...');
-    log('Filename: $filename');
-
-    if (kIsWeb) {
-      // Web download
-      try {
-        final bytes = utf8.encode(csvString);
-        final blob = html.Blob([bytes]);
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        html.AnchorElement(href: url)
-          ..setAttribute('download', filename)
-          ..click();
-        html.Url.revokeObjectUrl(url);
-        log('Web download initiated.');
-        _showToast('Laporan berhasil diunduh');
-      } catch (e) {
-        log('Error during web download: $e', error: e);
-        _showToast('Gagal mengunduh laporan di web');
+        csvData.add([idPresensi, nisn, status, tanggalWaktu]);
       }
-    } else {
-      // Mobile/Desktop share or save
-      try {
-        final directory = await getApplicationDocumentsDirectory();
-        final file = File('${directory.path}/$filename');
-        await file.writeAsString(csvString);
-        log('File saved to: ${file.path}');
 
-        // Use share_plus for cross-platform sharing
-        await Share.shareXFiles([XFile(file.path)], text: 'Laporan Kehadiran');
-        log('Share dialog shown.');
-        _showToast('Laporan siap dibagikan');
-      } catch (e) {
-        log('Error during mobile/desktop share: $e', error: e);
-        _showToast('Gagal membagikan laporan');
+      String csvString = const ListToCsvConverter().convert(csvData);
+
+      // Generate filename laporan_kehadiran_DDMMYY.csv (using the selected date)
+      String formattedDateFilename = DateFormat('ddMMyy').format(_selectedDate);
+      String filename = 'laporan_kehadiran_$formattedDateFilename.csv';
+
+      log('CSV generated. Attempting to download/share...');
+      log('Filename: $filename');
+
+      // Generate unique ID for the report
+      log('Fetching last report from Firestore...');
+      QuerySnapshot lastReport = await FirebaseFirestore.instance
+          .collection('laporan')
+          .orderBy('id_laporan', descending: true)
+          .limit(1)
+          .get();
+
+      String newId;
+      if (lastReport.docs.isEmpty) {
+        newId = 'idlpmi0001';
+        log('No existing reports found, using initial ID: $newId');
+      } else {
+        try {
+          String lastId = lastReport.docs.first.id;
+          log('Last report ID found: $lastId');
+
+          // Extract the numeric part and increment, ensuring it starts with the correct prefix
+          String numericPart =
+              lastId.substring(6); // Corrected substring index to 6
+          int lastNumber = int.parse(numericPart);
+          newId = 'idlpmi${(lastNumber + 1).toString().padLeft(4, '0')}';
+          log('Generated new report ID: $newId');
+        } catch (e) {
+          log('Error parsing last ID, using timestamp-based ID');
+          // Fallback to timestamp-based ID if parsing fails
+          String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+          newId = 'idlpmi${timestamp.substring(timestamp.length - 4)}';
+        }
       }
+
+      // Prepare data for Firestore
+      Map<String, dynamic> reportData = {
+        'id_laporan': newId,
+        'file_laporan': filename,
+        'tanggal_laporan': Timestamp.now(),
+      };
+
+      log('Attempting to save report to Firestore with data: $reportData');
+
+      // Save report to Firestore
+      await FirebaseFirestore.instance
+          .collection('laporan')
+          .doc(newId)
+          .set(reportData)
+          .then((_) {
+        log('Report successfully saved to Firestore with ID: $newId');
+        _showToast('Laporan berhasil disimpan ke database');
+      }).catchError((error) {
+        log('Error saving to Firestore: $error');
+        throw error; // Re-throw to be caught by outer try-catch
+      });
+
+      if (kIsWeb) {
+        // Web download
+        try {
+          final bytes = utf8.encode(csvString);
+          final blob = html.Blob([bytes]);
+          final url = html.Url.createObjectUrlFromBlob(blob);
+          html.AnchorElement(href: url)
+            ..setAttribute('download', filename)
+            ..click();
+          html.Url.revokeObjectUrl(url);
+          log('Web download initiated.');
+          _showToast('Laporan berhasil diunduh');
+        } catch (e) {
+          log('Error during web download: $e', error: e);
+          _showToast('Gagal mengunduh laporan di web');
+        }
+      } else {
+        // Mobile/Desktop share or save
+        try {
+          final directory = await getApplicationDocumentsDirectory();
+          final file = File('${directory.path}/$filename');
+          await file.writeAsString(csvString);
+          log('File saved to: ${file.path}');
+
+          // Use share_plus for cross-platform sharing
+          await Share.shareXFiles([XFile(file.path)],
+              text: 'Laporan Kehadiran');
+          log('Share dialog shown.');
+          _showToast('Laporan siap dibagikan');
+        } catch (e) {
+          log('Error during mobile/desktop share: $e', error: e);
+          _showToast('Gagal membagikan laporan');
+        }
+      }
+    } catch (e, stackTrace) {
+      log('Error in _generateAndDownloadCsv: $e');
+      log('Stack trace: $stackTrace');
+
+      // More specific error messages based on the type of error
+      String errorMessage = 'Gagal menyimpan laporan ke database';
+      if (e is FirebaseException) {
+        errorMessage += ': ${e.message}';
+        if (e.code == 'permission-denied') {
+          errorMessage += ' (Tidak memiliki izin untuk menyimpan)';
+        } else if (e.code == 'not-found') {
+          errorMessage += ' (Koleksi tidak ditemukan)';
+        }
+      } else {
+        errorMessage += ': ${e.toString()}';
+      }
+
+      _showToast(errorMessage, isError: true);
     }
   }
 
