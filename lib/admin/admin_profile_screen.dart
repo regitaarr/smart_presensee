@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smart_presensee/screens/login_screen.dart';
@@ -22,7 +24,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
   final TextEditingController _whatsappController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   // ignore: unused_field
-  bool _isEditing = false;
+  final bool _isEditing = false;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   @override
@@ -55,6 +57,10 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
         setState(() {
           adminData = userQuery.docs.first.data() as Map<String, dynamic>;
           adminId = userQuery.docs.first.id;
+          // ignore: duplicate_ignore
+          // ignore: avoid_print
+          print(
+              '[_loadAdminProfile] Admin ID loaded: $adminId for email: ${widget.adminEmail}');
           isLoading = false;
         });
 
@@ -71,6 +77,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
         errorMessage = 'Terjadi kesalahan: $e';
         isLoading = false;
       });
+      print('[_loadAdminProfile] Error loading admin profile: $e');
     }
   }
 
@@ -89,196 +96,570 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
           adminNIK = adminData['nik'] ?? '';
           _nikController.text = adminData['nik'] ?? '';
           adminDocId = adminQuery.docs.first.id;
+          print(
+              '[_loadAdminNIK] Existing NIK loaded: $adminNIK for adminId: $adminId');
         });
       }
     } catch (e) {
-      print('Error loading admin NIK: $e');
+      print('[_loadAdminNIK] Error loading admin NIK: $e');
     }
   }
 
   Future<void> _saveNIK() async {
     if (_nikController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('NIK tidak boleh kosong'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showSnackBar('NIK tidak boleh kosong', isError: true);
       return;
     }
 
     if (_nikController.text.trim().length != 16) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('NIK harus 16 digit'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showSnackBar('NIK harus 16 digit', isError: true);
+      return;
+    }
+
+    // Re-fetch adminId to ensure it's the most current
+    String? currentAdminId;
+    try {
+      QuerySnapshot userQuery = await FirebaseFirestore.instance
+          .collection('pengguna')
+          .where('email', isEqualTo: widget.adminEmail)
+          .limit(1)
+          .get();
+      if (userQuery.docs.isNotEmpty) {
+        currentAdminId = userQuery.docs.first.id;
+      } else {
+        _showSnackBar('Error: Data pengguna admin tidak ditemukan.',
+            isError: true);
+        print(
+            '[_saveNIK] Error: Admin user data not found for email: ${widget.adminEmail}');
+        return;
+      }
+    } catch (e) {
+      _showSnackBar('Error memuat ID admin: $e', isError: true);
+      print('[_saveNIK] Error re-fetching admin ID: $e');
       return;
     }
 
     try {
       String newNik = _nikController.text.trim();
+      print(
+          '[_saveNIK] Attempting to save new NIK: $newNik for adminId: $currentAdminId');
 
-      // Step 1: Query for all existing admin documents associated with this adminId
+      // Step 1: Find all existing admin documents associated with this adminId
       QuerySnapshot existingAdminQuery = await FirebaseFirestore.instance
           .collection('admin')
-          .where('id_pengguna', isEqualTo: adminId)
+          .where('id_pengguna', isEqualTo: currentAdminId)
           .get();
 
-      // Step 2: Delete any old NIK documents for this adminId that are not the new NIK
+      print(
+          '[_saveNIK] Found ${existingAdminQuery.docs.length} existing NIK documents for adminId: $currentAdminId');
+
+      // Step 2: Collect all deletion futures
+      List<Future<void>> deleteFutures = [];
       for (var doc in existingAdminQuery.docs) {
-        if (doc['nik'] != newNik) {
-          await FirebaseFirestore.instance
-              .collection('admin')
-              .doc(doc.id)
-              .delete();
-        }
-      }
-
-      // Step 3: Check if a document with the new NIK as its ID already exists
-      DocumentSnapshot newNikDoc = await FirebaseFirestore.instance
-          .collection('admin')
-          .doc(newNik)
-          .get();
-
-      if (newNikDoc.exists) {
-        // If a document with the new NIK as ID exists, update it
-        await FirebaseFirestore.instance
+        // Log details of documents being considered for deletion
+        print(
+            '[_saveNIK] Attempting to delete document with ID: ${doc.id} and NIK: ${doc['nik']} for adminId: $currentAdminId');
+        deleteFutures.add(FirebaseFirestore.instance
             .collection('admin')
-            .doc(newNik)
-            .update({
-          'id_pengguna': adminId,
-          'nik': newNik,
-        });
-      } else {
-        // If no document with the new NIK as ID exists, create a new one
-        await FirebaseFirestore.instance.collection('admin').doc(newNik).set({
-          'id_pengguna': adminId,
-          'nik': newNik,
-        });
+            .doc(doc.id)
+            .delete());
       }
 
-      setState(() {
-        adminNIK = newNik;
+      // Step 3: Wait for all deletion operations to complete
+      await Future.wait(deleteFutures);
+      print(
+          '[_saveNIK] All previous NIK documents for adminId: $currentAdminId have been deleted.');
+
+      // Optional: Add a small delay to ensure Firestore consistency, though usually not strictly necessary for single-client operations.
+      // await Future.delayed(const Duration(milliseconds: 100));
+
+      // Step 4: Create a new admin record with the new NIK as document ID
+      await FirebaseFirestore.instance.collection('admin').doc(newNik).set({
+        'id_pengguna': currentAdminId,
+        'nik': newNik,
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('NIK berhasil disimpan'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      setState(() {
+        adminNIK = newNik; // Update local state
+        adminId = currentAdminId; // Ensure adminId in state is also consistent
+      });
+
+      _showSnackBar('NIK berhasil disimpan');
+      print(
+          '[_saveNIK] New NIK $newNik successfully saved for adminId: $currentAdminId');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal menyimpan NIK: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('[_saveNIK] Error saving NIK: $e'); // Log the actual error
+      _showSnackBar('Gagal menyimpan NIK: $e', isError: true);
     }
   }
 
-  Future<void> _changePasswordDialog() async {
+  Widget _buildDialogTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    int? maxLength,
+    TextInputType? keyboardType,
+  }) {
+    return TextFormField(
+      controller: controller,
+      maxLength: maxLength,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFF4CAF50)), // Green color
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF4CAF50), width: 2),
+        ),
+        counterText: '',
+      ),
+    );
+  }
+
+  void _showEditProfileDialog() {
+    final TextEditingController namaController =
+        TextEditingController(text: adminData?['nama'] ?? '');
+    // Initialize _nikController with the current adminNIK when the dialog opens
+    _nikController.text = adminNIK ?? '';
+    final TextEditingController whatsappController =
+        TextEditingController(text: adminData?['whatsapp'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Edit Profil',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2D3748),
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDialogTextField(
+                  controller: namaController,
+                  label: 'Nama Lengkap',
+                  icon: Icons.person,
+                ),
+                const SizedBox(height: 16),
+                // Add NIK field for admin role
+                if (adminData?['role'] == 'admin') ...[
+                  _buildDialogTextField(
+                    controller: _nikController,
+                    label: 'NIK',
+                    icon: Icons.credit_card,
+                    maxLength: 16,
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                // Show NIP, Kelas, WhatsApp, and info message only for 'walikelas'
+                if (adminData?['role'] == 'walikelas') ...[
+                  _buildDialogTextField(
+                    controller:
+                        TextEditingController(text: adminData?['nip'] ?? ''),
+                    label: 'NIP',
+                    icon: Icons.badge,
+                    maxLength: 18,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDialogTextField(
+                    controller: TextEditingController(
+                        text: adminData?['kelasku'] ?? ''),
+                    label: 'Kelas yang Diampu',
+                    icon: Icons.class_,
+                    maxLength: 2,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDialogTextField(
+                    controller: whatsappController,
+                    label: 'Nomor WhatsApp',
+                    icon: Icons.phone_android,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E8),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: const Color(0xFF81C784).withOpacity(0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            color: Color(0xFF2E7D32), size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'NIP, Kelas, dan Nomor WhatsApp akan disimpan',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (adminData?['role'] == 'admin') ...[
+                  // Info message specifically for admin
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E8),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: const Color(0xFF81C784).withOpacity(0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            color: Color(0xFF2E7D32), size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Anda dapat mengubah Nama Lengkap, NIK, dan Nomor WhatsApp.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ] else ...[
+                  // Info message for other roles
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E8),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: const Color(0xFF81C784).withOpacity(0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            color: Color(0xFF2E7D32), size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Anda dapat mengubah Nama Lengkap dan Nomor WhatsApp.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF81C784), Color(0xFF66BB6A)],
+                ),
+              ),
+              child: ElevatedButton(
+                onPressed: () async {
+                  // Validate Nama
+                  if (namaController.text.trim().isEmpty) {
+                    _showSnackBar('Nama tidak boleh kosong', isError: true);
+                    return;
+                  }
+                  if (namaController.text.trim().length < 2) {
+                    _showSnackBar('Nama minimal 2 karakter', isError: true);
+                    return;
+                  }
+
+                  // Handle NIK update for admin role
+                  if (adminData?['role'] == 'admin') {
+                    if (_nikController.text.trim().isEmpty) {
+                      _showSnackBar('NIK tidak boleh kosong', isError: true);
+                      return;
+                    }
+                    if (_nikController.text.trim().length != 16) {
+                      _showSnackBar('NIK harus 16 digit', isError: true);
+                      return;
+                    }
+                    // Call _saveNIK() only if the NIK value has actually changed
+                    if (_nikController.text.trim() != adminNIK) {
+                      await _saveNIK(); // This handles its own success/error messages
+                    }
+                  }
+
+                  // Other profile fields update (nama and whatsapp)
+                  await _updateProfile(
+                    nama: namaController.text.trim(),
+                    whatsapp: whatsappController.text.trim(),
+                  );
+
+                  if (mounted) Navigator.of(context).pop();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                ),
+                child:
+                    const Text('Simpan', style: TextStyle(color: Colors.white)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showChangePasswordDialog() {
     final TextEditingController currentPasswordController =
         TextEditingController();
     final TextEditingController newPasswordController = TextEditingController();
     final TextEditingController confirmPasswordController =
         TextEditingController();
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Ubah Kata Sandi',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: currentPasswordController,
-                decoration: const InputDecoration(
-                  labelText: 'Kata Sandi Saat Ini',
-                  prefixIcon: Icon(Icons.lock),
-                ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: newPasswordController,
-                decoration: const InputDecoration(
-                  labelText: 'Kata Sandi Baru',
-                  prefixIcon: Icon(Icons.lock_open),
-                ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: confirmPasswordController,
-                decoration: const InputDecoration(
-                  labelText: 'Konfirmasi Kata Sandi Baru',
-                  prefixIcon: Icon(Icons.lock_outline),
-                ),
-                obscureText: true,
-              ),
-            ],
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Ubah Kata Sandi',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2D3748),
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDialogTextField(
+                  controller: currentPasswordController,
+                  label: 'Kata Sandi Saat Ini',
+                  icon: Icons.lock,
+                ),
+                const SizedBox(height: 16),
+                _buildDialogTextField(
+                  controller: newPasswordController,
+                  label: 'Kata Sandi Baru',
+                  icon: Icons.lock_open,
+                ),
+                const SizedBox(height: 16),
+                _buildDialogTextField(
+                  controller: confirmPasswordController,
+                  label: 'Konfirmasi Kata Sandi Baru',
+                  icon: Icons.lock_outline,
+                ),
+              ],
+            ),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              final current = currentPasswordController.text.trim();
-              final newPass = newPasswordController.text.trim();
-              final confirm = confirmPasswordController.text.trim();
-              if (current.isEmpty || newPass.isEmpty || confirm.isEmpty) {
-                _showSnackBar('Semua field harus diisi', isError: true);
-                return;
-              }
-              if (newPass != confirm) {
-                _showSnackBar('Konfirmasi kata sandi tidak cocok',
-                    isError: true);
-                return;
-              }
-              if (newPass.length < 6) {
-                _showSnackBar('Kata sandi baru minimal 6 karakter',
-                    isError: true);
-                return;
-              }
-              if (adminData?['password'] != current) {
-                _showSnackBar('Kata sandi saat ini salah', isError: true);
-                return;
-              }
-              try {
-                QuerySnapshot userQuery = await FirebaseFirestore.instance
-                    .collection('pengguna')
-                    .where('email', isEqualTo: widget.adminEmail)
-                    .limit(1)
-                    .get();
-                if (userQuery.docs.isNotEmpty) {
-                  String docId = userQuery.docs.first.id;
-                  await FirebaseFirestore.instance
-                      .collection('pengguna')
-                      .doc(docId)
-                      .update({
-                    'password': newPass,
-                  });
-                  _showSnackBar('Kata sandi berhasil diubah');
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF8A65), Color(0xFFFF7043)],
+                ),
+              ),
+              child: ElevatedButton(
+                onPressed: () async {
+                  await _changePassword(
+                    currentPassword: currentPasswordController.text.trim(),
+                    newPassword: newPasswordController.text.trim(),
+                    confirmPassword: confirmPasswordController.text.trim(),
+                  );
                   if (mounted) Navigator.of(context).pop();
-                }
-              } catch (e) {
-                _showSnackBar('Gagal mengubah kata sandi: $e', isError: true);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4CAF50)),
-            child: const Text('Ubah', style: TextStyle(color: Colors.white)),
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                ),
+                child:
+                    const Text('Ubah', style: TextStyle(color: Colors.white)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _updateProfile({
+    required String nama,
+    String? whatsapp,
+  }) async {
+    try {
+      print('Starting profile update...');
+      print('Nama: $nama, WhatsApp: $whatsapp');
+      print('Admin ID: $adminId');
+
+      if (adminId == null) {
+        throw Exception('Admin ID tidak ditemukan');
+      }
+
+      QuerySnapshot userQuery = await FirebaseFirestore.instance
+          .collection('pengguna')
+          .where('email', isEqualTo: widget.adminEmail)
+          .limit(1)
+          .get();
+
+      if (userQuery.docs.isNotEmpty) {
+        String docId = userQuery.docs.first.id;
+
+        await FirebaseFirestore.instance
+            .collection('pengguna')
+            .doc(docId)
+            .update({
+          'nama': nama,
+          'whatsapp': whatsapp,
+        });
+
+        print('Updated pengguna collection');
+
+        _showSnackBar('Profil berhasil diperbarui');
+        _loadAdminProfile(); // Reload to refresh displayed data
+      }
+    } catch (e) {
+      print('Error updating profile: $e');
+      _showSnackBar('Gagal memperbarui profil: ${e.toString()}', isError: true);
+    }
+  }
+
+  Future<void> _changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    if (currentPassword.isEmpty ||
+        newPassword.isEmpty ||
+        confirmPassword.isEmpty) {
+      _showSnackBar('Semua field harus diisi', isError: true);
+      return;
+    }
+    if (newPassword != confirmPassword) {
+      _showSnackBar('Konfirmasi kata sandi tidak cocok', isError: true);
+      return;
+    }
+    if (newPassword.length < 6) {
+      _showSnackBar('Kata sandi baru minimal 6 karakter', isError: true);
+      return;
+    }
+
+    try {
+      // Re-fetch current password from Firestore for verification
+      QuerySnapshot userQuery = await FirebaseFirestore.instance
+          .collection('pengguna')
+          .where('email', isEqualTo: widget.adminEmail)
+          .limit(1)
+          .get();
+
+      if (userQuery.docs.isNotEmpty) {
+        Map<String, dynamic> userDataFromDb =
+            userQuery.docs.first.data() as Map<String, dynamic>;
+        if (userDataFromDb['password'] != currentPassword) {
+          _showSnackBar('Kata sandi saat ini salah', isError: true);
+          return;
+        }
+
+        String docId = userQuery.docs.first.id;
+        await FirebaseFirestore.instance
+            .collection('pengguna')
+            .doc(docId)
+            .update({
+          'password': newPassword,
+        });
+
+        _showSnackBar('Kata sandi berhasil diubah');
+        _loadAdminProfile(); // Reload profile to update local state if needed
+      } else {
+        _showSnackBar('Error: Data pengguna tidak ditemukan.', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Gagal mengubah kata sandi: ${e.toString()}',
+          isError: true);
+    }
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Konfirmasi Keluar',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2D3748),
+            ),
           ),
-        ],
-      ),
+          content: const Text(
+            'Apakah Anda yakin ingin keluar dari aplikasi?',
+            style: TextStyle(color: Color(0xFF6B7280)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFE53E3E), Color(0xFFFC8181)],
+                ),
+              ),
+              child: ElevatedButton(
+                onPressed: () {
+                  if (mounted) Navigator.of(context).pop();
+                  if (mounted)
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                          builder: (context) => const LoginPage()),
+                      (route) => false,
+                    );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                ),
+                child:
+                    const Text('Keluar', style: TextStyle(color: Colors.white)),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -286,61 +667,13 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        backgroundColor: isError
+            ? const Color(0xFFE53E3E)
+            : const Color(0xFF4CAF50), // Changed to green for success
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
-  }
-
-  void _showLogoutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Konfirmasi Keluar',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => const LoginPage()),
-                (route) => false,
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Keluar', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDate(Timestamp? timestamp) {
-    if (timestamp == null) return '-';
-    final date = timestamp.toDate();
-    List<String> months = [
-      '',
-      'Januari',
-      'Februari',
-      'Maret',
-      'April',
-      'Mei',
-      'Juni',
-      'Juli',
-      'Agustus',
-      'September',
-      'Oktober',
-      'November',
-      'Desember'
-    ];
-    return '${date.day} ${months[date.month]} ${date.year}';
   }
 
   @override
@@ -592,7 +925,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
           title: 'Ubah Kata Sandi',
           subtitle: 'Ganti password admin',
           gradient: const [Color(0xFF81C784), Color(0xFF66BB6A)],
-          onTap: _changePasswordDialog,
+          onTap: _showChangePasswordDialog,
         ),
         const SizedBox(height: 16),
         _buildModernActionButton(
@@ -600,7 +933,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
           title: 'Keluar',
           subtitle: 'Logout dari aplikasi',
           gradient: const [Color(0xFFE53E3E), Color(0xFFFC8181)],
-          onTap: _showLogoutDialog,
+          onTap: () => _showLogoutDialog(context),
         ),
       ],
     );
@@ -671,170 +1004,5 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
         ),
       ),
     );
-  }
-
-  void _showEditProfileDialog() {
-    _nameController.text = adminData?['nama'] ?? '';
-    _nikController.text = adminNIK ?? '';
-    _whatsappController.text = adminData?['whatsapp'] ?? '';
-    _emailController.text = adminData?['email'] ?? '';
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Profil'),
-        content: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: _nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Nama Lengkap',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    prefixIcon: const Icon(Icons.person),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Nama tidak boleh kosong';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _emailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    prefixIcon: const Icon(Icons.email),
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Email tidak boleh kosong';
-                    }
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                        .hasMatch(value)) {
-                      return 'Email tidak valid';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _nikController,
-                  decoration: InputDecoration(
-                    labelText: 'NIK',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    prefixIcon: const Icon(Icons.badge),
-                  ),
-                  keyboardType: TextInputType.number,
-                  maxLength: 16,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'NIK tidak boleh kosong';
-                    }
-                    if (value.length != 16) {
-                      return 'NIK harus 16 digit';
-                    }
-                    if (!RegExp(r'^\d+$').hasMatch(value)) {
-                      return 'NIK harus berupa angka';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _whatsappController,
-                  decoration: InputDecoration(
-                    labelText: 'WhatsApp',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    prefixIcon: const Icon(Icons.phone),
-                  ),
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'WhatsApp tidak boleh kosong';
-                    }
-                    if (!RegExp(r'^\d+$').hasMatch(value)) {
-                      return 'WhatsApp harus berupa angka';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (_formKey.currentState!.validate()) {
-                _updateProfile();
-                Navigator.pop(context);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-            ),
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _updateProfile() async {
-    try {
-      // Update pengguna collection
-      await FirebaseFirestore.instance
-          .collection('pengguna')
-          .doc(adminId)
-          .update({
-        'nama': _nameController.text.trim(),
-        'email': _emailController.text.trim(),
-        'whatsapp': _whatsappController.text.trim(),
-      });
-
-      // Update admin collection
-      final nik = _nikController.text.trim();
-      await FirebaseFirestore.instance.collection('admin').doc(nik).set({
-        'nik': nik,
-        'id_pengguna': adminId,
-      });
-
-      setState(() {
-        adminNIK = nik;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profil berhasil diperbarui'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal memperbarui profil: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 }
