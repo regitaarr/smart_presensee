@@ -25,7 +25,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
   final TextEditingController _emailController = TextEditingController();
   // ignore: unused_field
   final bool _isEditing = false;
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  // final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
