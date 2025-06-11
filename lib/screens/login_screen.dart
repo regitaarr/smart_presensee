@@ -287,14 +287,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                     const SizedBox(height: 20),
 
                                     // Forgot Password
-                                    TextButton(
-                                      onPressed: _showForgotPasswordDialog,
-                                      child: const Text(
-                                        'Lupa kata sandi?',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: Color(0xFF81C784),
-                                          fontWeight: FontWeight.w500,
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton(
+                                        onPressed: _showForgotPasswordDialog,
+                                        child: const Text(
+                                          'Lupa kata sandi?',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: Color(0xFF81C784),
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ),
                                     ),

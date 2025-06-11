@@ -175,7 +175,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               _buildMenuItem(
                 icon: Icons.calendar_today,
-                title: 'Kelola Jadwal',
+                title: 'Data Jadwal',
                 index: 3,
               ),
               _buildMenuItem(
@@ -524,21 +524,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               _buildActionCard(
                 'Data Presensi',
-                'Lihat & kelola presensi',
+                'Lihat data presensi',
                 Icons.assignment,
                 Colors.greenAccent[700]!,
                 () => setState(() => _selectedIndex = 4),
               ),
               _buildActionCard(
-                'Kelola Jadwal',
-                'Atur jadwal mata pelajaran',
+                'Data Jadwal',
+                'Kelola jadwal mata pelajaran',
                 Icons.schedule,
                 Colors.orangeAccent,
                 () => setState(() => _selectedIndex = 3),
               ),
               _buildActionCard(
                 'Data Pengguna',
-                'Lihat semua pengguna',
+                'Kelola data pengguna',
                 Icons.supervised_user_circle,
                 Colors.blueGrey,
                 () => setState(() => _selectedIndex = 5),

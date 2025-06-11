@@ -37,7 +37,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       },
       body: {
         'target': phone, // format: 628xxxxxx
-        'message': 'Kode OTP reset password Anda: $otp',
+        'message': 'Kode OTP reset kata sandi Anda: $otp',
       },
     );
 
@@ -103,7 +103,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         setState(() {
           _otpVerified = true;
         });
-        _showSuccessToast('OTP benar, silakan masukkan password baru');
+        _showSuccessToast('OTP benar, silakan masukkan kata sandi baru');
       } else {
         _showErrorToast('OTP salah');
       }
@@ -133,7 +133,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             .collection('otp_reset')
             .doc(phone)
             .delete();
-        _showSuccessToast('Password berhasil direset!');
+        _showSuccessToast('kata sandi berhasil direset!');
         if (mounted) Navigator.of(context).pop();
       } else {
         _showErrorToast('Nomor WhatsApp tidak ditemukan');
@@ -296,7 +296,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                           const SizedBox(height: 10),
                           const Text(
-                            'Kami akan mengirimkan kode OTP satu kali ke nomor Whatsapp Anda',
+                            'Kami akan kirimkan OTP sekali via Whatsapp. Setelah verifikasi, silahkan buat kata sandi baru',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 14,
@@ -335,7 +335,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                         ),
                                       )
                                     : const Text(
-                                        'Kirim OTP',
+                                        'Dapatkan OTP',
                                         style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.w600,
@@ -387,8 +387,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ] else ...[
                             _buildModernTextField(
                               controller: _newPasswordController,
-                              label: 'Password Baru',
-                              hint: 'Masukkan password baru Anda',
+                              label: 'Kata Sandi Baru',
+                              hint: 'Masukkan kata sandi baru Anda',
                               isPassword: true,
                               keyboardType: TextInputType.text,
                             ),
@@ -417,7 +417,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                         ),
                                       )
                                     : const Text(
-                                        'Reset Password',
+                                        'Reset Kata Sandi',
                                         style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.w600,
