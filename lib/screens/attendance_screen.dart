@@ -1213,21 +1213,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   return Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: ElevatedButton(
-                        onPressed: () => _markAttendance(student.nisn, status),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isSelected
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
                               ? statusColors[status]
                               : Colors.grey[200],
-                          foregroundColor:
-                              isSelected ? Colors.white : Colors.black87,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
-                          status[0].toUpperCase() + status.substring(1),
-                          style: const TextStyle(fontSize: 12),
+                        child: Center(
+                          child: Text(
+                            status[0].toUpperCase() + status.substring(1),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isSelected ? Colors.white : Colors.black87,
+                            ),
+                          ),
                         ),
                       ),
                     ),

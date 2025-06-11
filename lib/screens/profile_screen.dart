@@ -811,170 +811,214 @@ class _ProfileScreenState extends State<ProfileScreen>
         TextEditingController(text: userData?['nama'] ?? '');
     final TextEditingController nipController =
         TextEditingController(text: walkelasData?['nip'] ?? '');
-    final TextEditingController kelasController =
-        TextEditingController(text: walkelasData?['kelasku'] ?? '');
+    String selectedClass = walkelasData?['kelasku'] ?? '';
     final TextEditingController whatsappController =
         TextEditingController(text: userData?['whatsapp'] ?? '');
+
+    final List<String> classOptions = [
+      '1A',
+      '1B',
+      '2A',
+      '2B',
+      '3A',
+      '3B',
+      '4A',
+      '4B',
+      '5A',
+      '5B',
+      '6A',
+      '6B'
+    ];
 
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text(
-            'Edit Profil',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2D3748),
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildDialogTextField(
-                  controller: namaController,
-                  label: 'Nama Lengkap',
-                  icon: Icons.person,
-                ),
-                const SizedBox(height: 16),
-                // Show NIP, Kelas, WhatsApp, and info message only for 'walikelas'
-                if (userData?['role'] == 'walikelas') ...[
-                  _buildDialogTextField(
-                    controller: nipController,
-                    label: 'NIP',
-                    icon: Icons.badge,
-                    maxLength: 18,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildDialogTextField(
-                    controller: kelasController,
-                    label: 'Kelas yang Diampu',
-                    icon: Icons.class_,
-                    maxLength: 2,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildDialogTextField(
-                    controller: whatsappController,
-                    label: 'Nomor WhatsApp',
-                    icon: Icons.phone_android,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E8),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: const Color(0xFF81C784).withOpacity(0.3)),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.info_outline,
-                            color: Color(0xFF2E7D32), size: 20),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'NIP, Kelas, dan Nomor WhatsApp akan disimpan',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF2E7D32),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ] else ...[
-                  // Info message for other roles
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E8),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: const Color(0xFF81C784).withOpacity(0.3)),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.info_outline,
-                            color: Color(0xFF2E7D32), size: 20),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Anda dapat mengubah Nama Lengkap saja.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF2E7D32),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF81C784), Color(0xFF66BB6A)],
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              title: const Text(
+                'Edit Profil',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2D3748),
                 ),
               ),
-              child: ElevatedButton(
-                onPressed: () async {
-                  if (namaController.text.trim().isEmpty) {
-                    _showSnackBar('Nama tidak boleh kosong', isError: true);
-                    return;
-                  }
-                  if (namaController.text.trim().length < 2) {
-                    _showSnackBar('Nama minimal 2 karakter', isError: true);
-                    return;
-                  }
-                  if (userData?['role'] == 'walikelas') {
-                    if (nipController.text.trim().length > 18) {
-                      _showSnackBar('NIP maksimal 18 karakter', isError: true);
-                      return;
-                    }
-                    if (kelasController.text.trim().length > 2) {
-                      _showSnackBar('Kelas maksimal 2 karakter', isError: true);
-                      return;
-                    }
-                  }
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildDialogTextField(
+                      controller: namaController,
+                      label: 'Nama Lengkap',
+                      icon: Icons.person,
+                    ),
+                    const SizedBox(height: 16),
+                    // Show NIP, Kelas, WhatsApp, and info message only for 'walikelas'
+                    if (userData?['role'] == 'walikelas') ...[
+                      _buildDialogTextField(
+                        controller: nipController,
+                        label: 'NIP',
+                        icon: Icons.badge,
+                        maxLength: 18,
+                      ),
+                      const SizedBox(height: 16),
+                      // Replace text field with dropdown for class selection
+                      DropdownButtonFormField<String>(
+                        value: selectedClass.isEmpty ? null : selectedClass,
+                        decoration: InputDecoration(
+                          labelText: 'Kelas yang Diampu',
+                          prefixIcon: const Icon(Icons.class_,
+                              color: Color(0xFF81C784)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide:
+                                const BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                                color: Color(0xFF81C784), width: 2),
+                          ),
+                        ),
+                        items: classOptions.map((String kelas) {
+                          return DropdownMenuItem<String>(
+                            value: kelas,
+                            child: Text(kelas),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            selectedClass = newValue ?? '';
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDialogTextField(
+                        controller: whatsappController,
+                        label: 'Nomor WhatsApp',
+                        icon: Icons.phone_android,
+                        keyboardType: TextInputType.phone,
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5E8),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: const Color(0xFF81C784).withOpacity(0.3)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline,
+                                color: Color(0xFF2E7D32), size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'NIP, Kelas, dan Nomor WhatsApp akan disimpan',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF2E7D32),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      // Info message for other roles
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5E8),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: const Color(0xFF81C784).withOpacity(0.3)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline,
+                                color: Color(0xFF2E7D32), size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Anda dapat mengubah Nama Lengkap saja.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF2E7D32),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child:
+                      const Text('Batal', style: TextStyle(color: Colors.grey)),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF81C784), Color(0xFF66BB6A)],
+                    ),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (namaController.text.trim().isEmpty) {
+                        _showSnackBar('Nama tidak boleh kosong', isError: true);
+                        return;
+                      }
+                      if (namaController.text.trim().length < 2) {
+                        _showSnackBar('Nama minimal 2 karakter', isError: true);
+                        return;
+                      }
+                      if (userData?['role'] == 'walikelas') {
+                        if (nipController.text.trim().length > 18) {
+                          _showSnackBar('NIP maksimal 18 karakter',
+                              isError: true);
+                          return;
+                        }
+                        if (selectedClass.isEmpty) {
+                          _showSnackBar('Kelas harus dipilih', isError: true);
+                          return;
+                        }
+                      }
 
-                  await _updateProfile(
-                    nama: namaController.text.trim(),
-                    nip: userData?['role'] == 'walikelas'
-                        ? nipController.text.trim()
-                        : null,
-                    kelas: userData?['role'] == 'walikelas'
-                        ? kelasController.text.trim()
-                        : null,
-                    whatsapp: userData?['role'] == 'walikelas'
-                        ? whatsappController.text.trim()
-                        : null,
-                  );
-                  if (mounted) Navigator.of(context).pop();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
+                      await _updateProfile(
+                        nama: namaController.text.trim(),
+                        nip: userData?['role'] == 'walikelas'
+                            ? nipController.text.trim()
+                            : null,
+                        kelas: userData?['role'] == 'walikelas'
+                            ? selectedClass
+                            : null,
+                        whatsapp: userData?['role'] == 'walikelas'
+                            ? whatsappController.text.trim()
+                            : null,
+                      );
+                      if (mounted) Navigator.of(context).pop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                    ),
+                    child: const Text('Simpan',
+                        style: TextStyle(color: Colors.white)),
+                  ),
                 ),
-                child:
-                    const Text('Simpan', style: TextStyle(color: Colors.white)),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         );
       },
     );
