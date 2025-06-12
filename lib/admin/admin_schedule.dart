@@ -843,6 +843,13 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
         centerTitle: true,
         backgroundColor: const Color(0xFF4CAF50),
         elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: _addNewSchedule,
+            icon: const Icon(Icons.add_circle_outline, color: Colors.white),
+            tooltip: 'Tambah Jadwal',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -1145,11 +1152,6 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                           ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addNewSchedule,
-        backgroundColor: const Color(0xFF4CAF50),
-        child: const Icon(Icons.add),
       ),
     );
   }
