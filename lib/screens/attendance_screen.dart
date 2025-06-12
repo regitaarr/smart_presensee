@@ -575,28 +575,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         int lastNumber = 0;
 
         if (lastId is String) {
-          log('Debugging lastId (raw from Firestore): $lastId');
           String processedId = lastId;
-          // Try to remove the known prefix, if it exists
           if (processedId.startsWith('idlpmi')) {
             processedId = processedId.substring(6);
           }
-
-          // Extract only digits from the remaining string
           String numericPart = processedId.replaceAll(RegExp(r'[^0-9]'), '');
-          log('Debugging numericPart (after cleaning): $numericPart');
-
           if (numericPart.isNotEmpty) {
             try {
               lastNumber = int.parse(numericPart);
             } catch (e) {
               log('Warning: Could not parse numeric part "$numericPart" from last report ID "$lastId". Error: $e. Defaulting to 0.');
             }
-          } else {
-            log('Warning: No numeric part found after stripping non-digits from last report ID: $lastId. Defaulting to 0.');
           }
-        } else {
-          log('Warning: Last report ID is not a string or is null: $lastId. Defaulting to 0.');
         }
         newId = 'idlpmi${(lastNumber + 1).toString().padLeft(4, '0')}';
       }
@@ -661,9 +651,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         String metode = studentMethods[nisn] ?? 'manual';
 
         csvData.add([
-          '="' +
-              nisn +
-              '"', // Format to preserve leading zeros without trailing comma
+          '="' + nisn + '"', // Format to preserve leading zeros
           studentData['nama_siswa'] ?? 'Nama tidak tersedia',
           studentData['kelas_sw']?.toUpperCase() ?? 'Tidak diketahui',
           studentData['jenis_kelamin'] == 'l' ? 'Laki-laki' : 'Perempuan',
@@ -1655,6 +1643,37 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         isLoading = true;
       });
 
+      // Get the latest report ID
+      final latestReport = await FirebaseFirestore.instance
+          .collection('laporan')
+          .orderBy('id_laporan', descending: true)
+          .limit(1)
+          .get();
+
+      String newId;
+      if (latestReport.docs.isEmpty) {
+        newId = 'idlpmi0001';
+      } else {
+        final lastId = latestReport.docs.first['id_laporan'];
+        int lastNumber = 0;
+
+        if (lastId is String) {
+          String processedId = lastId;
+          if (processedId.startsWith('idlpmi')) {
+            processedId = processedId.substring(6);
+          }
+          String numericPart = processedId.replaceAll(RegExp(r'[^0-9]'), '');
+          if (numericPart.isNotEmpty) {
+            try {
+              lastNumber = int.parse(numericPart);
+            } catch (e) {
+              log('Warning: Could not parse numeric part "$numericPart" from last report ID "$lastId". Error: $e. Defaulting to 0.');
+            }
+          }
+        }
+        newId = 'idlpmi${(lastNumber + 1).toString().padLeft(4, '0')}';
+      }
+
       // Prepare CSV data
       List<List<dynamic>> csvData = [];
 
@@ -1664,7 +1683,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       // Add data rows
       for (var record in attendanceHistory) {
         csvData.add([
-          '\'' + widget.student.nisn,
           _formatDate(record.tanggalWaktu),
           _formatTime(record.tanggalWaktu),
           record.status.toUpperCase(),
@@ -1687,7 +1705,10 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       csvData.add([]); // Empty row
       csvData.add(['REKAPITULASI KEHADIRAN']);
       csvData.add(['Nama Siswa', widget.student.nama]);
-      csvData.add(['NISN', widget.student.nisn]);
+      csvData.add([
+        'NISN',
+        '="' + widget.student.nisn + '"'
+      ]); // Format to preserve leading zeros
       csvData.add(['Kelas', widget.student.kelas.toUpperCase()]);
       csvData.add(['Total Presensi', attendanceHistory.length.toString()]);
       csvData.add(['Hadir', statusCount['hadir'].toString()]);
@@ -1701,6 +1722,13 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       // Generate filename
       String filename =
           'laporan_kehadiran_${widget.student.nisn}_${_formatDateForFilename(DateTime.now())}.csv';
+
+      // Save report data to Firestore
+      await FirebaseFirestore.instance.collection('laporan').doc(newId).set({
+        'id_laporan': newId,
+        'tanggal_laporan': Timestamp.fromDate(DateTime.now()),
+        'file_laporan': filename,
+      });
 
       if (kIsWeb) {
         // Web platform
