@@ -203,7 +203,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
         ),
         title: const Text(
-          'Jadwal Pelajaran',
+          'Jadwal Mata Pelajaran',
           style: TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.bold,
@@ -245,7 +245,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         const Icon(Icons.today, color: Colors.white, size: 24),
                         const SizedBox(width: 8),
                         Text(
-                          'Jadwal Hari Ini (${dayLabels[_getCurrentDay()]})',
+                          'Jadwal Mata Pelajaran Hari Ini (${dayLabels[_getCurrentDay()]})',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -291,7 +291,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         )),
                     if (todaySchedule.length > 3)
                       Text(
-                        '... dan ${todaySchedule.length - 3} mata pelajaran lainnya',
+                        '... dan ${todaySchedule.length - 3} jadwal mata pelajaran lainnya',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.white.withOpacity(0.8),
@@ -418,7 +418,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                         ),
                                         const SizedBox(height: 8),
                                         Text(
-                                          'Total jadwal: ${scheduleList.length}',
+                                          'Total jadwal mata peelajaran: ${scheduleList.length}',
                                           style: const TextStyle(
                                             fontSize: 14,
                                             color: Colors.grey,
@@ -469,7 +469,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           const Icon(Icons.schedule, size: 64, color: Colors.grey),
           const SizedBox(height: 16),
           const Text(
-            'Belum ada jadwal pelajaran',
+            'Belum ada jadwal mata pelajaran',
             style: TextStyle(
                 fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w500),
           ),
@@ -577,7 +577,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  '${schedules.length} mata pelajaran',
+                  '${schedules.length} jadwal mata pelajaran',
                   style: const TextStyle(
                     fontSize: 12,
                     color: Colors.grey,

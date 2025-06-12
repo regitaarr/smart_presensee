@@ -750,7 +750,7 @@ class _DashboardScreenState extends State<DashboardPage>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Total ${todaySchedule.length} mata pelajaran hari ini',
+                  'Total ${todaySchedule.length} jadwal mata pelajaran hari ini',
                   style: const TextStyle(
                     fontSize: 16,
                     color: Colors.white,
@@ -928,7 +928,7 @@ class _DashboardScreenState extends State<DashboardPage>
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Text(
-                        '+${todaySchedule.length - 1} mata pelajaran lainnya',
+                        '+${todaySchedule.length - 1} jadwal mata pelajaran lainnya',
                         style: const TextStyle(
                           fontSize: 14,
                           color: Colors.white,

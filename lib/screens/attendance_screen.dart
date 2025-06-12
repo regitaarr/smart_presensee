@@ -33,7 +33,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   String? errorMessage;
   String searchQuery = '';
   String? selectedGenderFilter;
-  String? selectedClassFilter;
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -57,21 +56,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     'l': 'Laki-laki',
     'p': 'Perempuan',
   };
-
-  final List<String> classOptions = [
-    '1a',
-    '1b',
-    '2a',
-    '2b',
-    '3a',
-    '3b',
-    '4a',
-    '4b',
-    '5a',
-    '5b',
-    '6a',
-    '6b'
-  ];
 
   @override
   void initState() {
@@ -105,11 +89,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       bool matchesGender = selectedGenderFilter == null ||
           student.jenisKelamin == selectedGenderFilter;
 
-      // Class filter
-      bool matchesClass = selectedClassFilter == null ||
-          student.kelas.toLowerCase() == selectedClassFilter!.toLowerCase();
-
-      return matchesSearch && matchesGender && matchesClass;
+      return matchesSearch && matchesGender;
     }).toList();
   }
 
@@ -592,24 +572,62 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         newId = 'idlpmi0001';
       } else {
         final lastId = latestReport.docs.first['id_laporan'];
-        final lastNumber = int.parse(lastId.substring(5));
+        int lastNumber = 0;
+
+        if (lastId is String) {
+          log('Debugging lastId (raw from Firestore): $lastId');
+          String processedId = lastId;
+          // Try to remove the known prefix, if it exists
+          if (processedId.startsWith('idlpmi')) {
+            processedId = processedId.substring(6);
+          }
+
+          // Extract only digits from the remaining string
+          String numericPart = processedId.replaceAll(RegExp(r'[^0-9]'), '');
+          log('Debugging numericPart (after cleaning): $numericPart');
+
+          if (numericPart.isNotEmpty) {
+            try {
+              lastNumber = int.parse(numericPart);
+            } catch (e) {
+              log('Warning: Could not parse numeric part "$numericPart" from last report ID "$lastId". Error: $e. Defaulting to 0.');
+            }
+          } else {
+            log('Warning: No numeric part found after stripping non-digits from last report ID: $lastId. Defaulting to 0.');
+          }
+        } else {
+          log('Warning: Last report ID is not a string or is null: $lastId. Defaulting to 0.');
+        }
         newId = 'idlpmi${(lastNumber + 1).toString().padLeft(4, '0')}';
       }
 
-      // Query all attendance records for the selected date
-      QuerySnapshot attendanceSnapshot =
-          await FirebaseFirestore.instance.collection('presensi').get();
+      // Query attendance records for the selected date
+      DateTime startOfDay =
+          DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      DateTime endOfDay = DateTime(
+          selectedDate.year, selectedDate.month, selectedDate.day, 23, 59, 59);
+
+      QuerySnapshot attendanceSnapshot = await FirebaseFirestore.instance
+          .collection('presensi')
+          .where('tanggal_waktu',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('tanggal_waktu',
+              isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+          .get();
 
       // Get all students
-      QuerySnapshot studentSnapshot = await FirebaseFirestore.instance
-          .collection('siswa')
-          .orderBy('nama_siswa')
-          .get();
+      Query studentQuery = FirebaseFirestore.instance.collection('siswa');
+      if (widget.userNip != null) {
+        studentQuery = studentQuery.where('nip', isEqualTo: widget.userNip);
+      }
+      QuerySnapshot studentSnapshot = await studentQuery.get();
 
       // Create a map to store attendance status for each student
       Map<String, String> studentAttendance = {};
+      Map<String, String> studentMethods = {};
       for (var doc in studentSnapshot.docs) {
         studentAttendance[doc.id] = 'alpha'; // Default status
+        studentMethods[doc.id] = 'manual'; // Default method
       }
 
       // Update attendance status from records
@@ -617,7 +635,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
         String nisn = data['nisn'];
         String status = data['status'] ?? 'alpha';
+        String metode = data['metode'] ?? 'manual';
         studentAttendance[nisn] = status;
+        studentMethods[nisn] = metode;
       }
 
       // Prepare CSV data
@@ -638,25 +658,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         Map<String, dynamic> studentData = doc.data() as Map<String, dynamic>;
         String nisn = doc.id;
         String status = studentAttendance[nisn] ?? 'alpha';
-
-        // Find the attendance record for this student
-        String metode = 'manual';
-        for (var attendanceDoc in attendanceSnapshot.docs) {
-          Map<String, dynamic> attendanceData =
-              attendanceDoc.data() as Map<String, dynamic>;
-          if (attendanceData['nisn'] == nisn) {
-            metode = attendanceData['metode'] ?? 'manual';
-            break;
-          }
-        }
+        String metode = studentMethods[nisn] ?? 'manual';
 
         csvData.add([
-          nisn,
+          '="' +
+              nisn +
+              '"', // Format to preserve leading zeros without trailing comma
           studentData['nama_siswa'] ?? 'Nama tidak tersedia',
-          studentData['kelas_sw'] ?? 'Tidak diketahui',
+          studentData['kelas_sw']?.toUpperCase() ?? 'Tidak diketahui',
           studentData['jenis_kelamin'] == 'l' ? 'Laki-laki' : 'Perempuan',
           status.toUpperCase(),
-          metode == 'face_recognition' ? 'Wajah' : 'Manual'
+          metode == 'face_recognition' ? 'Face Recognition' : 'Manual'
         ]);
       }
 
@@ -709,8 +721,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         final directory = await getTemporaryDirectory();
         final file = File('${directory.path}/$filename');
         await file.writeAsString(csv);
-        await Share.shareXFiles([XFile(file.path)],
-            text: 'Laporan Kehadiran ${_formatDate(selectedDate)}');
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: 'Laporan Kehadiran ${_formatDate(selectedDate)}',
+        );
       }
 
       if (mounted) {
@@ -871,74 +885,33 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Filters
-                Row(
-                  children: [
-                    // Gender filter
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: selectedGenderFilter,
-                        decoration: InputDecoration(
-                          labelText: 'Jenis Kelamin',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                        ),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text('Semua'),
-                          ),
-                          ...genderOptions
-                              .map((gender) => DropdownMenuItem<String>(
-                                    value: gender,
-                                    child: Text(genderLabels[gender]!),
-                                  )),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            selectedGenderFilter = value;
-                            _applyFilters();
-                          });
-                        },
-                      ),
+                // Gender filter
+                DropdownButtonFormField<String>(
+                  value: selectedGenderFilter,
+                  decoration: InputDecoration(
+                    labelText: 'Jenis Kelamin',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(width: 12),
-
-                    // Class filter
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: selectedClassFilter,
-                        decoration: InputDecoration(
-                          labelText: 'Kelas',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                        ),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text('Semua'),
-                          ),
-                          ...classOptions
-                              .map((kelas) => DropdownMenuItem<String>(
-                                    value: kelas,
-                                    child: Text(kelas.toUpperCase()),
-                                  )),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            selectedClassFilter = value;
-                            _applyFilters();
-                          });
-                        },
-                      ),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: null,
+                      child: Text('Semua'),
                     ),
+                    ...genderOptions.map((gender) => DropdownMenuItem<String>(
+                          value: gender,
+                          child: Text(genderLabels[gender]!),
+                        )),
                   ],
+                  onChanged: (value) {
+                    setState(() {
+                      selectedGenderFilter = value;
+                      _applyFilters();
+                    });
+                  },
                 ),
               ],
             ),
@@ -1279,6 +1252,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> _showEditStudentDialog(StudentAttendanceModel student) async {
     final TextEditingController nameController =
         TextEditingController(text: student.nama);
+    final TextEditingController nisnController =
+        TextEditingController(text: student.nisn);
     String selectedClass = student.kelas;
     String selectedGender = student.jenisKelamin;
 
@@ -1300,17 +1275,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         color: Colors.grey[100],
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Row(
+                      child: const Row(
                         children: [
-                          const Icon(Icons.person, color: Color(0xFF4CAF50)),
-                          const SizedBox(width: 8),
+                          Icon(Icons.person, color: Color(0xFF4CAF50)),
+                          SizedBox(width: 8),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'NISN: ${student.nisn}',
-                                  style: const TextStyle(
+                                  'Data Siswa',
+                                  style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
                                   ),
@@ -1319,6 +1294,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // NISN field
+                    TextFormField(
+                      controller: nisnController,
+                      decoration: const InputDecoration(
+                        labelText: 'NISN',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.badge),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -1334,24 +1320,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Class dropdown
-                    DropdownButtonFormField<String>(
-                      value: selectedClass,
+                    // Class field
+                    TextFormField(
+                      initialValue: selectedClass,
                       decoration: const InputDecoration(
                         labelText: 'Kelas',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.class_),
                       ),
-                      items: classOptions.map((kelas) {
-                        return DropdownMenuItem<String>(
-                          value: kelas,
-                          child: Text(kelas.toUpperCase()),
-                        );
-                      }).toList(),
                       onChanged: (value) {
-                        setState(() {
-                          selectedClass = value!;
-                        });
+                        selectedClass = value;
                       },
                     ),
                     const SizedBox(height: 16),
@@ -1406,7 +1384,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       );
                       return;
                     }
+                    if (nisnController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('NISN tidak boleh kosong'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
                     Navigator.of(context).pop({
+                      'nisn': nisnController.text.trim(),
                       'nama': nameController.text.trim(),
                       'kelas': selectedClass,
                       'jenis_kelamin': selectedGender,
@@ -1502,20 +1490,80 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
-  // Add this function after _showEditStudentDialog
+  // Update the _updateStudentData method to handle NISN changes
   Future<void> _updateStudentData(
-      String nisn, Map<String, dynamic> data) async {
+      String oldNisn, Map<String, dynamic> data) async {
     try {
       setState(() {
         isLoading = true;
       });
 
-      await FirebaseFirestore.instance.collection('siswa').doc(nisn).update({
-        'nama_siswa': data['nama'],
-        'kelas_sw': data['kelas'],
-        'jenis_kelamin': data['jenis_kelamin'],
-        'updated_at': FieldValue.serverTimestamp(),
-      });
+      // Get the current student data to preserve NIP
+      DocumentSnapshot currentStudent = await FirebaseFirestore.instance
+          .collection('siswa')
+          .doc(oldNisn)
+          .get();
+
+      Map<String, dynamic> currentData =
+          currentStudent.data() as Map<String, dynamic>;
+      String currentNip = currentData['nip'] ?? '';
+
+      // If NISN is changed, we need to create a new document and delete the old one
+      if (data['nisn'] != oldNisn) {
+        // Create new document with new NISN as document ID
+        await FirebaseFirestore.instance
+            .collection('siswa')
+            .doc(data['nisn'])
+            .set({
+          'nisn': data['nisn'],
+          'nama_siswa': data['nama'],
+          'kelas_sw': data['kelas'],
+          'jenis_kelamin': data['jenis_kelamin'],
+          'nip': currentNip,
+        });
+
+        // Update attendance records with new NISN
+        QuerySnapshot attendanceSnapshot = await FirebaseFirestore.instance
+            .collection('presensi')
+            .where('nisn', isEqualTo: oldNisn)
+            .get();
+
+        for (var doc in attendanceSnapshot.docs) {
+          await doc.reference.update({
+            'nisn': data['nisn'],
+          });
+        }
+
+        // Update face registration records with new NISN
+        QuerySnapshot faceSnapshot = await FirebaseFirestore.instance
+            .collection('wajah_siswa')
+            .where('nisn', isEqualTo: oldNisn)
+            .get();
+
+        for (var doc in faceSnapshot.docs) {
+          await doc.reference.update({
+            'nisn': data['nisn'],
+          });
+        }
+
+        // Delete old document
+        await FirebaseFirestore.instance
+            .collection('siswa')
+            .doc(oldNisn)
+            .delete();
+      } else {
+        // Just update the existing document
+        await FirebaseFirestore.instance
+            .collection('siswa')
+            .doc(oldNisn)
+            .update({
+          'nisn': data['nisn'],
+          'nama_siswa': data['nama'],
+          'kelas_sw': data['kelas'],
+          'jenis_kelamin': data['jenis_kelamin'],
+          'nip': currentNip,
+        });
+      }
 
       _showToast('Data siswa berhasil diperbarui');
       await _loadStudentData();
@@ -1616,10 +1664,11 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       // Add data rows
       for (var record in attendanceHistory) {
         csvData.add([
+          '\'' + widget.student.nisn,
           _formatDate(record.tanggalWaktu),
           _formatTime(record.tanggalWaktu),
           record.status.toUpperCase(),
-          record.metode == 'face_recognition' ? 'Wajah' : 'Manual'
+          record.metode == 'face_recognition' ? 'Face Recognition' : 'Manual'
         ]);
       }
 
@@ -1667,8 +1716,10 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         final directory = await getTemporaryDirectory();
         final file = File('${directory.path}/$filename');
         await file.writeAsString(csv);
-        await Share.shareXFiles([XFile(file.path)],
-            text: 'Laporan Kehadiran ${widget.student.nama}');
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: 'Laporan Kehadiran ${widget.student.nama}',
+        );
       }
 
       if (mounted) {
@@ -1810,371 +1861,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     }
   }
 
-  // Helper function untuk menghitung statistik
-  Map<String, int> _getAttendanceStats() {
-    Map<String, int> stats = {
-      'total': filteredHistory.length,
-      'hadir': filteredHistory.where((r) => r.status == 'hadir').length,
-      'sakit': filteredHistory.where((r) => r.status == 'sakit').length,
-      'izin': filteredHistory.where((r) => r.status == 'izin').length,
-      'alpha': filteredHistory.where((r) => r.status == 'alpha').length,
-    };
-    return stats;
-  }
-
-  // Function untuk edit/tambah presensi manual
-  Future<void> _showEditAttendanceDialog({AttendanceRecord? record}) async {
-    String selectedStatus = record?.status ?? 'sakit';
-    DateTime selectedDate = record?.tanggalWaktu ?? DateTime.now();
-    final dateController = TextEditingController(
-      text:
-          '${selectedDate.day.toString().padLeft(2, '0')}/${selectedDate.month.toString().padLeft(2, '0')}/${selectedDate.year}',
-    );
-    final timeController = TextEditingController(
-      text:
-          '${selectedDate.hour.toString().padLeft(2, '0')}:${selectedDate.minute.toString().padLeft(2, '0')}',
-    );
-
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Text(
-                  record == null ? 'Tambah Presensi Manual' : 'Edit Presensi'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Student info
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.person, color: Color(0xFF4CAF50)),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              widget.student.nama,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Date picker
-                    TextFormField(
-                      controller: dateController,
-                      decoration: const InputDecoration(
-                        labelText: 'Tanggal (DD/MM/YYYY)',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.calendar_today),
-                      ),
-                      readOnly: true,
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2020),
-                          lastDate:
-                              DateTime.now().add(const Duration(days: 30)),
-                        );
-                        if (picked != null) {
-                          selectedDate = DateTime(
-                            picked.year,
-                            picked.month,
-                            picked.day,
-                            selectedDate.hour,
-                            selectedDate.minute,
-                          );
-                          dateController.text =
-                              '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Time picker
-                    TextFormField(
-                      controller: timeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Waktu (HH:MM)',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.access_time),
-                      ),
-                      readOnly: true,
-                      onTap: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.fromDateTime(selectedDate),
-                        );
-                        if (picked != null) {
-                          selectedDate = DateTime(
-                            selectedDate.year,
-                            selectedDate.month,
-                            selectedDate.day,
-                            picked.hour,
-                            picked.minute,
-                          );
-                          timeController.text =
-                              '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Status dropdown
-                    DropdownButtonFormField<String>(
-                      value: selectedStatus,
-                      decoration: const InputDecoration(
-                        labelText: 'Status Presensi',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.assignment),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'hadir', child: Text('Hadir')),
-                        DropdownMenuItem(value: 'sakit', child: Text('Sakit')),
-                        DropdownMenuItem(value: 'izin', child: Text('Izin')),
-                        DropdownMenuItem(value: 'alpha', child: Text('Alpha')),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          selectedStatus = value!;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Info note
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue[200]!),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline,
-                              color: Colors.blue[700], size: 20),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Presensi ini akan tersimpan sebagai "Manual Entry"',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.blue[700],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Batal'),
-                ),
-                if (record != null) // Show delete button for existing records
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop({
-                      'action': 'delete',
-                      'record': record,
-                    }),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
-                    child: const Text('Hapus'),
-                  ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop({
-                    'action': record == null ? 'create' : 'update',
-                    'status': selectedStatus,
-                    'dateTime': selectedDate,
-                    'record': record,
-                  }),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4CAF50),
-                  ),
-                  child: Text(record == null ? 'Simpan' : 'Update'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (result != null) {
-      await _handleAttendanceAction(result);
-    }
-  }
-
-  // Handle create, update, delete attendance
-  Future<void> _handleAttendanceAction(Map<String, dynamic> data) async {
-    try {
-      setState(() {
-        isLoading = true;
-      });
-
-      final action = data['action'];
-
-      if (action == 'delete') {
-        await _deleteAttendance(data['record']);
-      } else if (action == 'create') {
-        await _createManualAttendance(
-          data['status'],
-          data['dateTime'],
-        );
-      } else if (action == 'update') {
-        await _updateAttendance(
-          data['record'],
-          data['status'],
-          data['dateTime'],
-        );
-      }
-
-      // Refresh data
-      await _loadAttendanceHistory();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_getSuccessMessage(action)),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      log('Error handling attendance action: $e');
-
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Gagal ${_getActionText(data['action'])}: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // Create new manual attendance
-  Future<void> _createManualAttendance(String status, DateTime dateTime) async {
-    // Check if attendance already exists for this date
-    QuerySnapshot existingAttendance = await FirebaseFirestore.instance
-        .collection('presensi')
-        .where('nisn', isEqualTo: widget.student.nisn)
-        .get();
-
-    // Check manually for same date
-    for (var doc in existingAttendance.docs) {
-      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-      if (data['tanggal_waktu'] != null) {
-        DateTime recordDate = (data['tanggal_waktu'] as Timestamp).toDate();
-        if (_isSameDay(recordDate, dateTime)) {
-          throw Exception(
-              'Presensi sudah ada untuk tanggal ${_formatDate(dateTime)}');
-        }
-      }
-    }
-
-    // Generate new attendance ID
-    String attendanceId = await _generateManualAttendanceId();
-
-    // Create new record
-    await FirebaseFirestore.instance
-        .collection('presensi')
-        .doc(attendanceId)
-        .set({
-      'id_presensi': attendanceId,
-      'nisn': widget.student.nisn,
-      'tanggal_waktu': Timestamp.fromDate(dateTime),
-      'status': status,
-      'metode': 'manual',
-      'created_at': FieldValue.serverTimestamp(),
-    });
-
-    log('Created manual attendance: $attendanceId');
-  }
-
-  // Update existing attendance
-  Future<void> _updateAttendance(
-      AttendanceRecord record, String status, DateTime dateTime) async {
-    await FirebaseFirestore.instance
-        .collection('presensi')
-        .doc(record.id)
-        .update({
-      'status': status,
-      'tanggal_waktu': Timestamp.fromDate(dateTime),
-      'metode': 'manual', // Always mark as manual when edited
-      'updated_at': FieldValue.serverTimestamp(),
-    });
-
-    log('Updated attendance: ${record.id}');
-  }
-
-  // Delete attendance record
-  Future<void> _deleteAttendance(AttendanceRecord record) async {
-    await FirebaseFirestore.instance
-        .collection('presensi')
-        .doc(record.id)
-        .delete();
-
-    log('Deleted attendance: ${record.id}');
-  }
-
-  // Generate manual attendance ID
-  Future<String> _generateManualAttendanceId() async {
-    const String prefix = 'idpr04';
-    final QuerySnapshot snapshot =
-        await FirebaseFirestore.instance.collection('presensi').get();
-    final int attendanceCount = snapshot.docs.length + 1;
-    final String formattedNumber = attendanceCount.toString().padLeft(4, '0');
-    return prefix + formattedNumber;
-  }
-
   // Helper methods
-  String _getSuccessMessage(String action) {
-    switch (action) {
-      case 'create':
-        return 'Presensi manual berhasil ditambahkan';
-      case 'update':
-        return 'Presensi berhasil diupdate';
-      case 'delete':
-        return 'Presensi berhasil dihapus';
-      default:
-        return 'Aksi berhasil';
-    }
-  }
-
-  String _getActionText(String action) {
-    switch (action) {
-      case 'create':
-        return 'menambah presensi';
-      case 'update':
-        return 'mengupdate presensi';
-      case 'delete':
-        return 'menghapus presensi';
-      default:
-        return 'memproses';
-    }
-  }
-
   String _formatDateTime(DateTime dateTime) {
     List<String> days = [
       'Minggu',
@@ -2215,13 +1902,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
   String _formatTime(DateTime dateTime) {
     return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-  }
-
-  // Helper function to check if two dates are the same day
-  bool _isSameDay(DateTime date1, DateTime date2) {
-    return date1.year == date2.year &&
-        date1.month == date2.month &&
-        date1.day == date2.day;
   }
 
   @override
@@ -2352,7 +2032,8 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
           ),
 
           // Statistics Summary
-          if (!isLoading && attendanceHistory.isNotEmpty)
+          if (!isLoading &&
+              filteredHistory.isNotEmpty) // Use filteredHistory here
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               padding: const EdgeInsets.all(16),
@@ -2652,7 +2333,9 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      record.metode == 'face_recognition' ? 'Wajah' : 'Manual',
+                      record.metode == 'face_recognition'
+                          ? 'Face Recognition'
+                          : 'Manual',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],
@@ -2688,6 +2371,238 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Map<String, int> _getAttendanceStats() {
+    Map<String, int> stats = {
+      'total': attendanceHistory.length,
+      'hadir': 0,
+      'sakit': 0,
+      'izin': 0,
+      'alpha': 0,
+    };
+
+    for (var record in attendanceHistory) {
+      stats[record.status] = (stats[record.status] ?? 0) + 1;
+    }
+
+    return stats;
+  }
+
+  Future<void> _showEditAttendanceDialog({AttendanceRecord? record}) async {
+    String selectedStatus = record?.status ?? 'hadir';
+    DateTime selectedDate = record?.tanggalWaktu ?? DateTime.now();
+    TimeOfDay selectedTime = TimeOfDay(
+      hour: record?.tanggalWaktu.hour ?? DateTime.now().hour,
+      minute: record?.tanggalWaktu.minute ?? DateTime.now().minute,
+    );
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(record == null ? 'Tambah Presensi' : 'Edit Presensi'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Student info
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.person, color: Color(0xFF4CAF50)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.student.nama,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  'NISN: ${widget.student.nisn}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Status dropdown
+                    DropdownButtonFormField<String>(
+                      value: selectedStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Status Presensi',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.assignment),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'hadir', child: Text('Hadir')),
+                        DropdownMenuItem(value: 'sakit', child: Text('Sakit')),
+                        DropdownMenuItem(value: 'izin', child: Text('Izin')),
+                        DropdownMenuItem(value: 'alpha', child: Text('Alpha')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedStatus = value!;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Date picker
+                    ListTile(
+                      leading: const Icon(Icons.calendar_today),
+                      title: const Text('Tanggal'),
+                      subtitle: Text(_formatDate(selectedDate)),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now().add(const Duration(days: 1)),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            selectedDate = picked;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Time picker
+                    ListTile(
+                      leading: const Icon(Icons.access_time),
+                      title: const Text('Waktu'),
+                      subtitle: Text(_formatTime(selectedDate)),
+                      onTap: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: selectedTime,
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            selectedTime = picked;
+                            selectedDate = DateTime(
+                              selectedDate.year,
+                              selectedDate.month,
+                              selectedDate.day,
+                              selectedTime.hour,
+                              selectedTime.minute,
+                            );
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Batal'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop({
+                      'status': selectedStatus,
+                      'tanggal_waktu': selectedDate,
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4CAF50),
+                  ),
+                  child: const Text('Simpan'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      try {
+        setState(() {
+          isLoading = true;
+        });
+
+        if (record == null) {
+          // Create new attendance record
+          String attendanceId = await _generateAttendanceId();
+          await FirebaseFirestore.instance
+              .collection('presensi')
+              .doc(attendanceId)
+              .set({
+            'id_presensi': attendanceId,
+            'nisn': widget.student.nisn,
+            'tanggal_waktu': Timestamp.fromDate(result['tanggal_waktu']),
+            'status': result['status'],
+            'metode': 'manual',
+            'created_at': FieldValue.serverTimestamp(),
+          });
+        } else {
+          // Update existing record
+          await FirebaseFirestore.instance
+              .collection('presensi')
+              .doc(record.id)
+              .update({
+            'tanggal_waktu': Timestamp.fromDate(result['tanggal_waktu']),
+            'status': result['status'],
+            'metode': 'manual',
+            'updated_at': FieldValue.serverTimestamp(),
+          });
+        }
+
+        _showToast(record == null
+            ? 'Presensi berhasil ditambahkan'
+            : 'Presensi berhasil diperbarui');
+        await _loadAttendanceHistory();
+      } catch (e) {
+        log('Error saving attendance: $e');
+        _showToast('Gagal menyimpan presensi: ${e.toString()}');
+      } finally {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  // Add these helper methods before the build method in _AttendanceHistoryScreenState
+  Future<String> _generateAttendanceId() async {
+    const String prefix = 'idpr04';
+    final QuerySnapshot snapshot =
+        await FirebaseFirestore.instance.collection('presensi').get();
+    final int attendanceCount = snapshot.docs.length + 1;
+    final String formattedNumber = attendanceCount.toString().padLeft(4, '0');
+    return prefix + formattedNumber;
+  }
+
+  void _showToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
       ),
     );
   }
