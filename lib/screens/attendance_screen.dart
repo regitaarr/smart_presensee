@@ -1139,7 +1139,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             ),
                             const SizedBox(width: 16),
                             Text(
-                              'JK: ${genderLabels[student.jenisKelamin] ?? student.jenisKelamin}',
+                              'Jenis Kelamin: ${genderLabels[student.jenisKelamin] ?? student.jenisKelamin}',
                               style: TextStyle(
                                   fontSize: 14, color: Colors.grey[600]),
                             ),
