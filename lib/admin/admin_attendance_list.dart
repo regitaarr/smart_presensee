@@ -62,6 +62,23 @@ class _AdminAttendanceListState extends State<AdminAttendanceList> {
         59,
       );
 
+      // Get all students first
+      QuerySnapshot studentsSnapshot =
+          await FirebaseFirestore.instance.collection('siswa').get();
+
+      // Create a map of all students
+      Map<String, Map<String, dynamic>> allStudents = {};
+      for (var doc in studentsSnapshot.docs) {
+        Map<String, dynamic> studentData = doc.data() as Map<String, dynamic>;
+        allStudents[doc.id] = {
+          'nisn': doc.id,
+          'nama_siswa': studentData['nama_siswa'],
+          'kelas_sw': studentData['kelas_sw'],
+          'status': 'alpha', // Default status as alpha
+          'tanggal_waktu': Timestamp.fromDate(startOfDay), // Default time
+        };
+      }
+
       // Get attendance data for the selected date
       QuerySnapshot attendanceSnapshot = await FirebaseFirestore.instance
           .collection('presensi')
@@ -71,25 +88,22 @@ class _AdminAttendanceListState extends State<AdminAttendanceList> {
               isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
           .get();
 
-      List<Map<String, dynamic>> tempList = [];
+      // Update student status based on attendance
       for (var doc in attendanceSnapshot.docs) {
         Map<String, dynamic> attendanceData =
             doc.data() as Map<String, dynamic>;
-
-        // Get student data
-        DocumentSnapshot studentDoc = await FirebaseFirestore.instance
-            .collection('siswa')
-            .doc(attendanceData['nisn'])
-            .get();
-
-        if (studentDoc.exists) {
-          Map<String, dynamic> studentData =
-              studentDoc.data() as Map<String, dynamic>;
-          attendanceData['nama_siswa'] = studentData['nama_siswa'];
-          attendanceData['kelas_sw'] = studentData['kelas_sw'];
-          tempList.add(attendanceData);
+        String nisn = attendanceData['nisn'];
+        if (allStudents.containsKey(nisn)) {
+          allStudents[nisn] = {
+            ...allStudents[nisn]!,
+            'status': attendanceData['status'],
+            'tanggal_waktu': attendanceData['tanggal_waktu'],
+          };
         }
       }
+
+      // Convert map to list
+      List<Map<String, dynamic>> tempList = allStudents.values.toList();
 
       setState(() {
         attendanceList = tempList;

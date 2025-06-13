@@ -617,12 +617,12 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                     }
 
                     if (nipController.text.trim().isEmpty) {
-                      _showToast('NIP guru tidak boleh kosong');
+                      _showToast('NIP wali kelas tidak boleh kosong');
                       return;
                     }
 
                     if (nipController.text.trim().length != 18) {
-                      _showToast('NIP guru harus 18 karakter');
+                      _showToast('NIP wali kelas harus 18 karakter');
                       return;
                     }
 

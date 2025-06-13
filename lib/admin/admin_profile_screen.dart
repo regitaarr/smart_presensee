@@ -265,6 +265,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                   label: 'Nomor WhatsApp',
                   icon: Icons.phone_android,
                   keyboardType: TextInputType.phone,
+                  maxLength: 13,
                 ),
                 const SizedBox(height: 16),
                 // Add NIK field for admin role
@@ -410,9 +411,27 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                     _showSnackBar('Email tidak boleh kosong', isError: true);
                     return;
                   }
-                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                      .hasMatch(emailController.text.trim())) {
-                    _showSnackBar('Format email tidak valid', isError: true);
+                  if (!emailController.text.contains('@')) {
+                    _showSnackBar('Email harus mengandung karakter @',
+                        isError: true);
+                    return;
+                  }
+
+                  // Validate WhatsApp
+                  if (whatsappController.text.trim().isEmpty) {
+                    _showSnackBar('Nomor WhatsApp tidak boleh kosong',
+                        isError: true);
+                    return;
+                  }
+                  if (whatsappController.text.trim().length != 13) {
+                    _showSnackBar('Nomor WhatsApp harus 13 digit',
+                        isError: true);
+                    return;
+                  }
+                  if (!RegExp(r'^\d+$')
+                      .hasMatch(whatsappController.text.trim())) {
+                    _showSnackBar('Nomor WhatsApp harus berupa angka',
+                        isError: true);
                     return;
                   }
 
@@ -424,6 +443,11 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                     }
                     if (_nikController.text.trim().length != 16) {
                       _showSnackBar('NIK harus 16 digit', isError: true);
+                      return;
+                    }
+                    if (!RegExp(r'^\d+$')
+                        .hasMatch(_nikController.text.trim())) {
+                      _showSnackBar('NIK harus berupa angka', isError: true);
                       return;
                     }
                     // Call _saveNIK() only if the NIK value has actually changed
@@ -738,13 +762,13 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                               children: [
                                 // Profile Header
                                 _buildProfileHeader(),
-                                const SizedBox(height: 32),
+                                const SizedBox(height: 20),
                                 // Profile Information
                                 _buildProfileInformation(),
-                                const SizedBox(height: 32),
+                                const SizedBox(height: 20),
                                 // Action Buttons
                                 _buildActionButtons(),
-                                const SizedBox(height: 24),
+                                const SizedBox(height: 16),
                               ],
                             ),
                           ),
@@ -760,57 +784,57 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     return Column(
       children: [
         Container(
-          width: 120,
-          height: 120,
+          width: 80,
+          height: 80,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [Color(0xFF81C784), Color(0xFF66BB6A)],
             ),
-            borderRadius: BorderRadius.circular(60),
+            borderRadius: BorderRadius.circular(40),
             boxShadow: [
               BoxShadow(
                 color: const Color(0xFF81C784).withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
           child: const Icon(
             Icons.admin_panel_settings,
-            size: 60,
+            size: 40,
             color: Colors.white,
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
         Text(
           adminData?['nama'] ?? 'Nama tidak tersedia',
           style: const TextStyle(
-            fontSize: 26,
+            fontSize: 20,
             fontWeight: FontWeight.bold,
             color: Color(0xFF2D3748),
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [Color(0xFFFF8A65), Color(0xFFFF7043)],
             ),
-            borderRadius: BorderRadius.circular(25),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
                 color: const Color(0xFFFF8A65).withOpacity(0.3),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
           child: const Text(
             'Administrator',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               color: Colors.white,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
@@ -823,15 +847,15 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
 
   Widget _buildProfileInformation() {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.grey.withOpacity(0.1),
             spreadRadius: 1,
-            blurRadius: 4,
+            blurRadius: 3,
             offset: const Offset(0, 2),
           ),
         ],
@@ -842,30 +866,30 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
           const Text(
             'Informasi Profil',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
               color: Color(0xFF2D3748),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _buildInfoCard(
             icon: Icons.person_outline,
             title: 'Nama Lengkap',
             value: adminData?['nama'] ?? 'Belum diisi',
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           _buildInfoCard(
             icon: Icons.email_outlined,
             title: 'Email',
             value: adminData?['email'] ?? 'Belum diisi',
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           _buildInfoCard(
             icon: Icons.badge_outlined,
             title: 'NIK',
             value: adminNIK ?? 'Belum diisi',
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           _buildInfoCard(
             icon: Icons.phone_outlined,
             title: 'WhatsApp',
@@ -882,27 +906,27 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     required String value,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.withOpacity(0.2)),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.grey.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               icon,
               color: Colors.grey,
-              size: 24,
+              size: 20,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -910,16 +934,16 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: Colors.grey[600],
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     color: Color(0xFF2D3748),
                     fontWeight: FontWeight.w600,
                   ),
@@ -942,15 +966,15 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
           gradient: const [Color(0xFF4FC3F7), Color(0xFF29B6F6)],
           onTap: _showEditProfileDialog,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         _buildModernActionButton(
           icon: Icons.lock_outline,
           title: 'Ubah Kata Sandi',
-          subtitle: 'Ganti password admin',
+          subtitle: 'Ganti kata sandi admin',
           gradient: const [Color(0xFF81C784), Color(0xFF66BB6A)],
           onTap: _showChangePasswordDialog,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         _buildModernActionButton(
           icon: Icons.logout,
           title: 'Keluar',
@@ -971,30 +995,30 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
               colors: gradient.map((c) => c.withOpacity(0.1)).toList()),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: gradient[0].withOpacity(0.3)),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 gradient: LinearGradient(colors: gradient),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 icon,
                 color: Colors.white,
-                size: 24,
+                size: 20,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1002,16 +1026,16 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF2D3748),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 12,
                       color: Colors.grey[600],
                     ),
                   ),
@@ -1020,7 +1044,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
             ),
             const Icon(
               Icons.arrow_forward_ios,
-              size: 16,
+              size: 14,
               color: Colors.grey,
             ),
           ],

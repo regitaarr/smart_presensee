@@ -452,42 +452,47 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             )
           else
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 20,
-              mainAxisSpacing: 20,
-              childAspectRatio: 1.4,
-              children: [
-                _buildStatCard(
-                  'Total Siswa',
-                  totalStudents.toString(),
-                  Icons.people,
-                  Colors.blueAccent,
+            Center(
+              child: SizedBox(
+                width: 600,
+                child: GridView.count(
+                  crossAxisCount: 4,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisSpacing: 15,
+                  mainAxisSpacing: 15,
+                  childAspectRatio: 1.2,
+                  children: [
+                    _buildStatCard(
+                      'Total Siswa',
+                      totalStudents.toString(),
+                      Icons.people,
+                      Colors.blueAccent,
+                    ),
+                    _buildStatCard(
+                      'Wajah Terdaftar',
+                      totalFaceRegistered.toString(),
+                      Icons.face,
+                      Colors.deepPurpleAccent,
+                    ),
+                    _buildStatCard(
+                      'Hadir Hari Ini',
+                      todayPresent.toString(),
+                      Icons.check_circle,
+                      Colors.greenAccent[700]!,
+                    ),
+                    _buildStatCard(
+                      'Belum Hadir',
+                      todayAbsent.toString(),
+                      Icons.cancel,
+                      Colors.redAccent,
+                    ),
+                  ],
                 ),
-                _buildStatCard(
-                  'Wajah Terdaftar',
-                  totalFaceRegistered.toString(),
-                  Icons.face,
-                  Colors.deepPurpleAccent,
-                ),
-                _buildStatCard(
-                  'Hadir Hari Ini',
-                  todayPresent.toString(),
-                  Icons.check_circle,
-                  Colors.greenAccent[700]!,
-                ),
-                _buildStatCard(
-                  'Belum Hadir',
-                  todayAbsent.toString(),
-                  Icons.cancel,
-                  Colors.redAccent,
-                ),
-              ],
+              ),
             ),
 
-          const SizedBox(height: 40),
+          const SizedBox(height: 30),
 
           // Quick Actions
           const Text(
@@ -501,12 +506,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
           const SizedBox(height: 20),
 
           GridView.count(
-            crossAxisCount: 2,
+            crossAxisCount: 4,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 20,
-            mainAxisSpacing: 20,
-            childAspectRatio: 1.3,
+            crossAxisSpacing: 15,
+            mainAxisSpacing: 15,
+            childAspectRatio: 1.1,
             children: [
               _buildActionCard(
                 'Data Siswa',
@@ -560,15 +565,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _buildStatCard(
       String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: color.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -577,23 +582,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
         children: [
           Icon(
             icon,
-            size: 40,
+            size: 28,
             color: color,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
-              fontSize: 30,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
               color: color,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             title,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 12,
               color: Colors.grey[700],
             ),
             textAlign: TextAlign.center,
@@ -612,17 +617,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
   ) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
               color: color.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -631,27 +636,29 @@ class _AdminDashboardState extends State<AdminDashboard> {
           children: [
             Icon(
               icon,
-              size: 40,
+              size: 28,
               color: color,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             Text(
               title,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               subtitle,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 11,
                 color: Colors.grey[600],
               ),
               textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

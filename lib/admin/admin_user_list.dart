@@ -157,12 +157,18 @@ class _AdminUserListState extends State<AdminUserList> {
               const SizedBox(height: 12),
               TextField(
                 controller: emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  helperText: 'Email harus mengandung karakter @',
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: whatsappController,
-                decoration: const InputDecoration(labelText: 'WhatsApp'),
+                decoration: const InputDecoration(
+                  labelText: 'WhatsApp',
+                  helperText: 'Nomor harus 13 digit dan diawali dengan 62',
+                ),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
@@ -188,13 +194,46 @@ class _AdminUserListState extends State<AdminUserList> {
           ),
           ElevatedButton(
             onPressed: () async {
+              // Validasi WhatsApp
+              if (!whatsappController.text.startsWith('62') ||
+                  whatsappController.text.length != 13 ||
+                  !RegExp(r'^\d+$').hasMatch(whatsappController.text)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                        'Nomor WhatsApp harus 13 digit dan diawali dengan 62'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              // Validasi Email
+              if (!emailController.text.contains('@')) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Email harus mengandung karakter @'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
               await _updateUser(user['id_pengguna'], {
                 'nama': namaController.text,
                 'email': emailController.text,
                 'whatsapp': whatsappController.text,
                 'role': role,
               });
-              if (mounted) Navigator.pop(context);
+              if (mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Data pengguna berhasil diperbarui'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
             },
             child: const Text('Simpan'),
           ),

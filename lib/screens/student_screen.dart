@@ -233,12 +233,17 @@ class _StudentScreenState extends State<StudentScreen>
                                 hint: 'Masukkan NISN siswa (10 digit)',
                                 icon: Icons.badge_outlined,
                                 keyboardType: TextInputType.number,
+                                maxLength: 10,
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
                                     return 'NISN tidak boleh kosong';
                                   }
-                                  if (value.trim().length < 10) {
-                                    return 'NISN minimal 10 digit';
+                                  if (value.trim().length != 10) {
+                                    return 'NISN harus 10 digit';
+                                  }
+                                  if (!RegExp(r'^\d+$')
+                                      .hasMatch(value.trim())) {
+                                    return 'NISN harus berupa angka';
                                   }
                                   return null;
                                 },
@@ -388,6 +393,7 @@ class _StudentScreenState extends State<StudentScreen>
     required String hint,
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
+    int? maxLength,
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -655,6 +661,15 @@ class _StudentScreenState extends State<StudentScreen>
     try {
       final String nisn = _nisnController.text.trim();
       final String nama = _namaController.text.trim();
+
+      // Validate NISN length
+      if (nisn.length != 10) {
+        _showErrorToast('NISN harus 10 digit');
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
 
       // Check if NISN already exists
       final QuerySnapshot existingStudent = await FirebaseFirestore.instance
