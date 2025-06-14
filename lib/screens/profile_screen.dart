@@ -862,6 +862,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                         label: 'NIP',
                         icon: Icons.badge,
                         maxLength: 18,
+                        keyboardType: TextInputType.number,
+                        helperText: 'NIP harus 18 digit',
                       ),
                       const SizedBox(height: 16),
                       // Replace text field with dropdown for class selection
@@ -900,6 +902,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                         label: 'Nomor WhatsApp',
                         icon: Icons.phone_android,
                         keyboardType: TextInputType.phone,
+                        maxLength: 13,
+                        helperText: 'Nomor WhatsApp harus 13 digit',
                       ),
                       const SizedBox(height: 16),
                       Container(
@@ -983,8 +987,34 @@ class _ProfileScreenState extends State<ProfileScreen>
                         return;
                       }
                       if (userData?['role'] == 'walikelas') {
-                        if (nipController.text.trim().length > 18) {
-                          _showSnackBar('NIP maksimal 18 karakter',
+                        if (nipController.text.trim().isEmpty) {
+                          _showSnackBar('NIP tidak boleh kosong',
+                              isError: true);
+                          return;
+                        }
+                        if (nipController.text.trim().length != 18) {
+                          _showSnackBar('NIP harus 18 digit', isError: true);
+                          return;
+                        }
+                        if (!RegExp(r'^\d+$')
+                            .hasMatch(nipController.text.trim())) {
+                          _showSnackBar('NIP harus berupa angka',
+                              isError: true);
+                          return;
+                        }
+                        if (whatsappController.text.trim().isEmpty) {
+                          _showSnackBar('Nomor WhatsApp tidak boleh kosong',
+                              isError: true);
+                          return;
+                        }
+                        if (whatsappController.text.trim().length != 13) {
+                          _showSnackBar('Nomor WhatsApp harus 13 digit',
+                              isError: true);
+                          return;
+                        }
+                        if (!RegExp(r'^\d+$')
+                            .hasMatch(whatsappController.text.trim())) {
+                          _showSnackBar('Nomor WhatsApp harus berupa angka',
                               isError: true);
                           return;
                         }
@@ -1030,6 +1060,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     required IconData icon,
     int? maxLength,
     TextInputType? keyboardType,
+    String? helperText,
   }) {
     return TextFormField(
       controller: controller,
@@ -1047,6 +1078,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           borderSide: const BorderSide(color: Color(0xFF81C784), width: 2),
         ),
         counterText: '',
+        helperText: helperText,
       ),
     );
   }

@@ -1293,7 +1293,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         labelText: 'NISN',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.badge),
+                        helperText: 'NISN harus 10 digit',
                       ),
+                      keyboardType: TextInputType.number,
+                      maxLength: 10,
                     ),
                     const SizedBox(height: 16),
 
@@ -1376,6 +1379,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('NISN tidak boleh kosong'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    if (nisnController.text.trim().length != 10) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('NISN harus 10 digit'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    if (!RegExp(r'^\d+$')
+                        .hasMatch(nisnController.text.trim())) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('NISN harus berupa angka'),
                           backgroundColor: Colors.red,
                         ),
                       );
