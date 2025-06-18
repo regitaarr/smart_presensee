@@ -248,13 +248,67 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         date1.day == date2.day;
   }
 
+  // Optimized function to generate attendance ID
   Future<String> _generateAttendanceId() async {
-    const String prefix = 'idpr04';
-    final QuerySnapshot snapshot =
-        await FirebaseFirestore.instance.collection('presensi').get();
-    final int attendanceCount = snapshot.docs.length + 1;
-    final String formattedNumber = attendanceCount.toString().padLeft(4, '0');
-    return prefix + formattedNumber;
+    try {
+      const String prefix = 'idpr04';
+
+      // Query only the last record with the prefix to get the highest number
+      QuerySnapshot lastRecords = await FirebaseFirestore.instance
+          .collection('presensi')
+          .where('id_presensi', isGreaterThanOrEqualTo: prefix)
+          .where('id_presensi', isLessThan: '${prefix}z')
+          .orderBy('id_presensi', descending: true)
+          .limit(1)
+          .get();
+
+      int nextNumber = 1;
+
+      if (lastRecords.docs.isNotEmpty) {
+        String lastId = lastRecords.docs.first.get('id_presensi') as String;
+        log('Last attendance ID found: $lastId');
+
+        if (lastId.length >= 10 && lastId.startsWith(prefix)) {
+          String lastNumberStr = lastId.substring(6);
+          int lastNumber = int.tryParse(lastNumberStr) ?? 0;
+          nextNumber = lastNumber + 1;
+        }
+      }
+
+      String formattedNumber = nextNumber.toString().padLeft(4, '0');
+      String newId = '$prefix$formattedNumber';
+
+      if (newId.length != 10) {
+        throw Exception('Generated ID length is not 10 characters: $newId');
+      }
+
+      // Check if the ID already exists (rare case)
+      DocumentSnapshot existingDoc = await FirebaseFirestore.instance
+          .collection('presensi')
+          .doc(newId)
+          .get();
+
+      if (existingDoc.exists) {
+        log('ID $newId already exists, trying next number...');
+        nextNumber++;
+        formattedNumber = nextNumber.toString().padLeft(4, '0');
+        newId = '$prefix$formattedNumber';
+      }
+
+      log('Generated attendance ID: $newId');
+      return newId;
+    } catch (e) {
+      log('Error generating attendance ID: $e');
+
+      // Fallback: use timestamp-based ID
+      DateTime now = DateTime.now();
+      String timeString =
+          '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+      String fallbackId = 'idpr04$timeString';
+
+      log('Using fallback ID: $fallbackId');
+      return fallbackId;
+    }
   }
 
   Future<void> _markAttendance(String nisn, String status) async {
@@ -2640,12 +2694,65 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
   // Add these helper methods before the build method in _AttendanceHistoryScreenState
   Future<String> _generateAttendanceId() async {
-    const String prefix = 'idpr04';
-    final QuerySnapshot snapshot =
-        await FirebaseFirestore.instance.collection('presensi').get();
-    final int attendanceCount = snapshot.docs.length + 1;
-    final String formattedNumber = attendanceCount.toString().padLeft(4, '0');
-    return prefix + formattedNumber;
+    try {
+      const String prefix = 'idpr04';
+
+      // Query only the last record with the prefix to get the highest number
+      QuerySnapshot lastRecords = await FirebaseFirestore.instance
+          .collection('presensi')
+          .where('id_presensi', isGreaterThanOrEqualTo: prefix)
+          .where('id_presensi', isLessThan: '${prefix}z')
+          .orderBy('id_presensi', descending: true)
+          .limit(1)
+          .get();
+
+      int nextNumber = 1;
+
+      if (lastRecords.docs.isNotEmpty) {
+        String lastId = lastRecords.docs.first.get('id_presensi') as String;
+        log('Last attendance ID found: $lastId');
+
+        if (lastId.length >= 10 && lastId.startsWith(prefix)) {
+          String lastNumberStr = lastId.substring(6);
+          int lastNumber = int.tryParse(lastNumberStr) ?? 0;
+          nextNumber = lastNumber + 1;
+        }
+      }
+
+      String formattedNumber = nextNumber.toString().padLeft(4, '0');
+      String newId = '$prefix$formattedNumber';
+
+      if (newId.length != 10) {
+        throw Exception('Generated ID length is not 10 characters: $newId');
+      }
+
+      // Check if the ID already exists (rare case)
+      DocumentSnapshot existingDoc = await FirebaseFirestore.instance
+          .collection('presensi')
+          .doc(newId)
+          .get();
+
+      if (existingDoc.exists) {
+        log('ID $newId already exists, trying next number...');
+        nextNumber++;
+        formattedNumber = nextNumber.toString().padLeft(4, '0');
+        newId = '$prefix$formattedNumber';
+      }
+
+      log('Generated attendance ID: $newId');
+      return newId;
+    } catch (e) {
+      log('Error generating attendance ID: $e');
+
+      // Fallback: use timestamp-based ID
+      DateTime now = DateTime.now();
+      String timeString =
+          '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+      String fallbackId = 'idpr04$timeString';
+
+      log('Using fallback ID: $fallbackId');
+      return fallbackId;
+    }
   }
 
   void _showToast(String message) {
