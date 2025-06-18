@@ -176,7 +176,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         String timeString =
             '${existingTime.hour.toString().padLeft(2, '0')}:${existingTime.minute.toString().padLeft(2, '0')}';
         _showFailureDialog(
-          title: "Presensi Gagal",
+          title: "Presensi Gagal!",
           description:
               "Kamu $studentName sudah melakukan presensi hari ini pada pukul $timeString!",
         );
@@ -248,7 +248,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         return true;
       } else {
         log('Error: Failed to verify saved attendance record');
-        showToast('Gagal menyimpan presensi. Silakan coba lagi.',
+        showToast('Gagal menyimpan presensi. Silakan coba lagi!',
             isError: true);
         return false;
       }
@@ -522,7 +522,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       log("Getting User Error: $e");
       setState(() => isMatching = false);
       showToast(
-          "Terjadi kesalahan saat mengambil data wajah!. Silahkan coba lagi",
+          "Terjadi kesalahan saat mengambil data wajah!. Silahkan coba lagi!",
           isError: true);
     }).then((snap) async {
       if (snap.docs.isNotEmpty) {
@@ -626,7 +626,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
               _showFailureDialog(
                 title: "Gagal Menyimpan Presensi",
                 description:
-                    "Terjadi kesalahan saat menyimpan data presensi. Silakan coba lagi.",
+                    "Terjadi kesalahan saat menyimpan data presensi. Silakan coba lagi!",
               );
             }
             break;
@@ -646,9 +646,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       if (trialNumber == 4) {
         setState(() => trialNumber = 1);
         _showFailureDialog(
-          title: "Presensi gagal!",
+          title: "Presensi Gagal!",
           description:
-              "Wajah tidak cocok dengan yang ada di database. Silahkan coba kembali.",
+              "Wajah tidak cocok dengan yang ada di database. Silahkan coba kembali!",
         );
       } else if (trialNumber == 3) {
         setState(() {
@@ -660,9 +660,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       } else {
         setState(() => trialNumber++);
         _showFailureDialog(
-          title: "Presensi gagal!",
+          title: "Presensi Gagal!",
           description:
-              "Wajah tidak cocok dengan yang ada di database. Silahkan coba kembali.",
+              "Wajah tidak cocok dengan yang ada di database. Silahkan coba kembali!",
         );
       }
     }
@@ -754,7 +754,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         .catchError((e) {
       log("Getting User Error: $e");
       setState(() => isMatching = false);
-      showToast("Terjadi kesalahan!. Silahkan coba lagi.", isError: true);
+      showToast("Terjadi kesalahan!. Silahkan coba lagi!", isError: true);
     }).then((snap) {
       if (snap.docs.isNotEmpty) {
         users.clear();
@@ -971,7 +971,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
           Text(
             '1. Posisikan wajah di tengah kamera\n'
             '2. Pastikan pencahayaan cukup\n'
-            '3. Hindari menggunakan masker dan kacamata\n',
+            '3. Hindari menggunakan masker\n',
             style: TextStyle(
               fontSize: 16,
               color: Color(0xFF6B7280),

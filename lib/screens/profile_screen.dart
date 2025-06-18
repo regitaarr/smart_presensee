@@ -921,7 +921,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'NIP, Kelas, dan Nomor WhatsApp akan disimpan',
+                                'Silakan lengkapi data profil Anda',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF2E7D32),
