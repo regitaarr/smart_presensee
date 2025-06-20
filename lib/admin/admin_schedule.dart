@@ -1057,9 +1057,9 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                                           .withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: Icon(
+                                    child: const Icon(
                                       Icons.schedule,
-                                      color: const Color(0xFF4CAF50),
+                                      color: Color(0xFF4CAF50),
                                       size: 24,
                                     ),
                                   ),
