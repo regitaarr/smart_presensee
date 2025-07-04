@@ -11,12 +11,18 @@ class ScheduleScreen extends StatefulWidget {
   State<ScheduleScreen> createState() => _ScheduleScreenState();
 }
 
-class _ScheduleScreenState extends State<ScheduleScreen> {
+class _ScheduleScreenState extends State<ScheduleScreen>
+    with TickerProviderStateMixin {
   List<ScheduleModel> scheduleList = [];
   List<ScheduleModel> filteredScheduleList = [];
   bool isLoading = true;
   String? errorMessage;
   String? selectedDayFilter;
+
+  late AnimationController _fadeController;
+  late AnimationController _slideController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
   final List<String> dayOptions = [
     'senin',
@@ -39,7 +45,41 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeAnimations();
     _loadScheduleData();
+  }
+
+  void _initializeAnimations() {
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeOut),
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(
+        CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic));
+
+    _fadeController.forward();
+    Future.delayed(const Duration(milliseconds: 300), () {
+      _slideController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    _slideController.dispose();
+    super.dispose();
   }
 
   void _applyFilters() {
@@ -189,270 +229,248 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         .toList();
   }
 
+  bool _isCurrentSchedule(ScheduleModel schedule) {
+    final now = TimeOfDay.now();
+    final startMinutes = schedule.jamMulai.hour * 60 + schedule.jamMulai.minute;
+    final endMinutes =
+        schedule.jamSelesai.hour * 60 + schedule.jamSelesai.minute;
+    final nowMinutes = now.hour * 60 + now.minute;
+    return nowMinutes >= startMinutes && nowMinutes < endMinutes;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final todaySchedule = _getTodaySchedule();
-
     return Scaffold(
-      backgroundColor: const Color(0xFFFFC107),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFFFC107),
-        elevation: 0,
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-        ),
-        title: const Text(
-          'Jadwal Mata Pelajaran',
-          style: TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFE8F5E8), // Light pastel green
+              Color(0xFFFFF3E0), // Light pastel orange
+              Color(0xFFE8F5E8), // Light pastel green
+            ],
+            stops: [0.0, 0.5, 1.0],
           ),
         ),
-        titleSpacing: 0,
-        actions: [
-          IconButton(
-            onPressed: _loadScheduleData,
-            icon: const Icon(Icons.refresh, color: Colors.black87),
-            tooltip: 'Refresh',
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Modern App Bar
+              FadeTransition(
+                opacity: _fadeAnimation,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back,
+                            color: Color(0xFF2E7D32), size: 24),
+                      ),
+                      const SizedBox(width: 4),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Jadwal Mata Pelajaran',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2E7D32),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Day filter
+              SlideTransition(
+                position: _slideAnimation,
+                child: Container(
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Text(
+                            'Filter Jadwal',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: selectedDayFilter,
+                        decoration: InputDecoration(
+                          labelText: 'Pilih Hari',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                                color: Color(0xFFFF8A65), width: 2),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[50],
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          prefixIcon: const Icon(Icons.calendar_today,
+                              color: Color(0xFF36C340)),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text('Semua Hari'),
+                          ),
+                          ...dayOptions.map((day) => DropdownMenuItem<String>(
+                                value: day,
+                                child: Text(dayLabels[day]!),
+                              )),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            selectedDayFilter = value;
+                            _applyFilters();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Schedule list
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: isLoading
+                      ? _buildLoadingState()
+                      : errorMessage != null
+                          ? _buildErrorState()
+                          : scheduleList.isEmpty
+                              ? _buildEmptyState()
+                              : filteredScheduleList.isEmpty
+                                  ? _buildNoFilteredDataState()
+                                  : _buildScheduleList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF8A65)),
+            strokeWidth: 3,
+          ),
+          SizedBox(height: 24),
+          Text(
+            'Memuat jadwal...',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Today's schedule card at top
-            if (!isLoading && todaySchedule.isNotEmpty)
-              Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF36C340),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.today, color: Colors.white, size: 24),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Jadwal Mata Pelajaran Hari Ini (${dayLabels[_getCurrentDay()]})',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    ...todaySchedule.take(3).map((schedule) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  '${_formatTimeOfDay(schedule.jamMulai)}-${_formatTimeOfDay(schedule.jamSelesai)}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  '${schedule.mataPelajaran} (${schedule.kelas.toUpperCase()})',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )),
-                    if (todaySchedule.length > 3)
-                      Text(
-                        '... dan ${todaySchedule.length - 3} jadwal mata pelajaran lainnya',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.8),
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+    );
+  }
 
-            // Day filter
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
             Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5)
-                ],
+                color: const Color(0xFFFFEBEE),
+                borderRadius: BorderRadius.circular(20),
               ),
-              child: DropdownButtonFormField<String>(
-                value: selectedDayFilter,
-                decoration: InputDecoration(
-                  labelText: 'Filter Hari',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text('Semua Hari'),
-                  ),
-                  ...dayOptions.map((day) => DropdownMenuItem<String>(
-                        value: day,
-                        child: Text(dayLabels[day]!),
-                      )),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    selectedDayFilter = value;
-                    _applyFilters();
-                  });
-                },
+              child: const Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Color(0xFFE53E3E),
               ),
             ),
-
-            // Schedule list
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            const SizedBox(height: 24),
+            const Text(
+              'Gagal Memuat Data',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D3748),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              errorMessage!,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Color(0xFF6B7280),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: _loadScheduleData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Coba Lagi'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF8A65),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: isLoading
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF36C340)),
-                            ),
-                            SizedBox(height: 16),
-                            Text('Memuat jadwal...'),
-                          ],
-                        ),
-                      )
-                    : errorMessage != null
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.error,
-                                    size: 64, color: Colors.red),
-                                const SizedBox(height: 16),
-                                const Text(
-                                  'Error memuat data',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  errorMessage!,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: _loadScheduleData,
-                                  child: const Text('Coba Lagi'),
-                                ),
-                              ],
-                            ),
-                          )
-                        : scheduleList.isEmpty
-                            ? _buildEmptyState()
-                            : filteredScheduleList.isEmpty
-                                ? Center(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(Icons.search_off,
-                                            size: 64, color: Colors.grey),
-                                        const SizedBox(height: 16),
-                                        const Text(
-                                          'Tidak ada jadwal untuk hari ini',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            color: Colors.grey,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'Total jadwal mata peelajaran: ${scheduleList.length}',
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        ElevatedButton(
-                                          onPressed: () {
-                                            setState(() {
-                                              selectedDayFilter = null;
-                                              _applyFilters();
-                                            });
-                                          },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor:
-                                                const Color(0xFF36C340),
-                                          ),
-                                          child: const Text('Lihat Semua Hari'),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : RefreshIndicator(
-                                    onRefresh: _loadScheduleData,
-                                    child: ListView.builder(
-                                      padding: const EdgeInsets.all(16),
-                                      itemCount: _buildScheduleByDay().length,
-                                      itemBuilder: (context, index) {
-                                        final dayGroup =
-                                            _buildScheduleByDay()[index];
-                                        return _buildDayScheduleCard(dayGroup);
-                                      },
-                                    ),
-                                  ),
               ),
             ),
           ],
@@ -463,31 +481,140 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.schedule, size: 64, color: Colors.grey),
-          const SizedBox(height: 16),
-          const Text(
-            'Belum ada jadwal mata pelajaran',
-            style: TextStyle(
-                fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Hubungi admin untuk menambahkan jadwal',
-            style: TextStyle(fontSize: 14, color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: _loadScheduleData,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Refresh'),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF36C340),
-                foregroundColor: Colors.white),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF8A65), Color(0xFFFFB74D)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.schedule,
+                size: 64,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Belum Ada Jadwal',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D3748),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Hubungi admin untuk menambahkan jadwal mata pelajaran',
+              style: TextStyle(
+                fontSize: 16,
+                color: Color(0xFF6B7280),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: _loadScheduleData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Refresh'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF8A65),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoFilteredDataState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF8A65), Color(0xFFFFB74D)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.search_off,
+                size: 64,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Tidak Ada Jadwal',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D3748),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Tidak ada jadwal untuk hari yang dipilih\nTotal jadwal: ${scheduleList.length}',
+              style: const TextStyle(
+                fontSize: 16,
+                color: Color(0xFF6B7280),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  selectedDayFilter = null;
+                  _applyFilters();
+                });
+              },
+              icon: const Icon(Icons.clear_all),
+              label: const Text('Lihat Semua Hari'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF8A65),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScheduleList() {
+    return RefreshIndicator(
+      onRefresh: _loadScheduleData,
+      color: const Color(0xFFFF8A65),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(20),
+        itemCount: _buildScheduleByDay().length,
+        itemBuilder: (context, index) {
+          final dayGroup = _buildScheduleByDay()[index];
+          return _buildDayScheduleCard(dayGroup);
+        },
       ),
     );
   }
@@ -532,17 +659,20 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     List<ScheduleModel> schedules = dayGroup['schedules'];
     bool isToday = day == _getCurrentDay();
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: isToday ? 4 : 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: isToday
-            ? const BorderSide(color: Color(0xFF36C340), width: 2)
-            : BorderSide.none,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9), // Hijau pastel untuk semua card
+        borderRadius: BorderRadius.circular(16),
+        border: isToday
+            ? Border.all(
+                color: const Color(0xFFFFC107),
+                width: 2) // Orange untuk hari ini
+            : Border.all(
+                color: const Color(0xFF81C784), width: 1), // Hijau untuk lain
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -551,97 +681,114 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               children: [
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: isToday
-                        ? const Color(0xFF36C340)
-                        : const Color(0xFFFFC107),
+                        ? const Color(0xFFFFC107)
+                        : const Color(0xFF36C340),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (isToday)
-                        const Icon(Icons.today, size: 16, color: Colors.white),
-                      if (isToday) const SizedBox(width: 4),
+                      const Icon(Icons.today, size: 18, color: Colors.white),
+                      const SizedBox(width: 6),
                       Text(
                         dayLabels[day]!,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: isToday ? Colors.white : Colors.black87,
+                          color: Colors.white,
                         ),
                       ),
                     ],
                   ),
                 ),
                 const Spacer(),
-                Text(
-                  '${schedules.length} jadwal mata pelajaran',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isToday
+                        ? const Color(0xFFFFC107)
+                        : const Color(0xFF36C340),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${schedules.length} jadwal',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             // Schedule items
-            ...schedules.map((schedule) => _buildScheduleItem(schedule)),
+            ...schedules
+                .map((schedule) => _buildScheduleItem(schedule, isToday)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildScheduleItem(ScheduleModel schedule) {
+  Widget _buildScheduleItem(ScheduleModel schedule, bool isToday) {
+    final isCurrent = _isCurrentSchedule(schedule);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[200]!),
+        color: const Color(0xFFE8F5E9), // Hijau pastel untuk semua card
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isCurrent
+              ? Colors.white.withOpacity(0.2)
+              : const Color(0xFFFF8A65).withOpacity(0.2),
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
           // Time
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFF36C340).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFF36C340),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               children: [
                 Text(
                   _formatTimeOfDay(schedule.jamMulai),
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF36C340),
+                    color: Colors.white,
                   ),
                 ),
-                const Text(
-                  '―',
-                  style: TextStyle(
-                    fontSize: 8,
-                    color: Color(0xFF36C340),
-                  ),
+                Container(
+                  width: 20,
+                  height: 1,
+                  color: Colors.white.withOpacity(0.5),
+                  margin: const EdgeInsets.symmetric(vertical: 4),
                 ),
                 Text(
                   _formatTimeOfDay(schedule.jamSelesai),
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF36C340),
+                    color: Colors.white,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
 
           // Subject info
           Expanded(
@@ -651,25 +798,26 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 Text(
                   schedule.mataPelajaran,
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    color: Colors.black87, // Hitam
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.class_,
-                      size: 16,
-                      color: Colors.grey[600],
+                      size: 18,
+                      color: Colors.black87,
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Text(
                       'Kelas ${schedule.kelas.toUpperCase()}',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 14,
-                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
                       ),
                     ),
                   ],
@@ -680,17 +828,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
           // Duration
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFC107).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(6),
+              color: const Color(0xFF36C340),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               _calculateDuration(schedule.jamMulai, schedule.jamSelesai),
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
+                color: Colors.white,
               ),
             ),
           ),

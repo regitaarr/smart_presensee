@@ -1,0 +1,25 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "pengguna",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "email",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "walikelas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "id_pengguna",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+} 

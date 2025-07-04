@@ -3,6 +3,7 @@ import 'package:smart_presensee/admin/admin_dashboard.dart';
 import 'package:smart_presensee/screens/dashboard_screen.dart';
 import 'package:smart_presensee/screens/signup_screen.dart';
 import 'package:smart_presensee/screens/forgot_password_screen.dart';
+import 'package:smart_presensee/services/firestore_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'dart:developer';
@@ -451,12 +452,25 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       final String email = _emailController.text.trim();
       final String password = _passwordController.text.trim();
 
-      // Query user from 'pengguna' collection
-      final QuerySnapshot userQuery = await FirebaseFirestore.instance
-          .collection('pengguna')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
+      log('=== MULAI PROSES LOGIN ===');
+      log('Email: $email');
+
+      // Check Firestore connection first
+      bool isConnected = await FirestoreHelper.checkConnection();
+      if (!isConnected) {
+        _showErrorToast(
+            'Tidak dapat terhubung ke database. Periksa koneksi internet Anda.');
+        return;
+      }
+
+      // Query user from 'pengguna' collection using helper
+      final QuerySnapshot userQuery = await FirestoreHelper.safeQuery(
+        collection: 'pengguna',
+        whereConditions: [
+          {'field': 'email', 'operator': '==', 'value': email}
+        ],
+        limit: 1,
+      );
 
       if (userQuery.docs.isEmpty) {
         _showErrorToast('Email tidak ditemukan');
@@ -469,6 +483,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       final String userName = userData['nama'] ?? userData['name'] ?? 'User';
       final String userRole = userData['role'] ?? 'user';
       final String userId = userDoc.id;
+
+      log('User found: $userName (Role: $userRole)');
 
       if (password == storedPassword) {
         _showSuccessToast('Login berhasil!');
@@ -486,12 +502,15 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           } else if (userRole.toLowerCase() == 'walikelas') {
             String? walikelasNip;
             try {
-              final QuerySnapshot walikelasQuery = await FirebaseFirestore
-                  .instance
-                  .collection('walikelas')
-                  .where('id_pengguna', isEqualTo: userId)
-                  .limit(1)
-                  .get();
+              final QuerySnapshot walikelasQuery =
+                  await FirestoreHelper.safeQuery(
+                collection: 'walikelas',
+                whereConditions: [
+                  {'field': 'id_pengguna', 'operator': '==', 'value': userId}
+                ],
+                limit: 1,
+              );
+
               if (walikelasQuery.docs.isNotEmpty) {
                 walikelasNip = (walikelasQuery.docs.first.data()
                     as Map<String, dynamic>)['nip'];
@@ -528,7 +547,18 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         _showErrorToast('Kata sandi salah');
       }
     } catch (e) {
-      _showErrorToast('Terjadi kesalahan: ${e.toString()}');
+      log('ERROR during login: $e');
+      String errorMessage = 'Terjadi kesalahan saat login';
+
+      if (e.toString().contains('PERMISSION_DENIED')) {
+        errorMessage = 'Masalah izin database. Hubungi administrator.';
+      } else if (e.toString().contains('network')) {
+        errorMessage = 'Masalah koneksi internet. Periksa koneksi Anda.';
+      } else {
+        errorMessage = 'Terjadi kesalahan: ${e.toString()}';
+      }
+
+      _showErrorToast(errorMessage);
     } finally {
       if (mounted) {
         setState(() {

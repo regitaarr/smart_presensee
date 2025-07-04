@@ -61,7 +61,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   void dispose() {
     _fadeController.dispose();
     _scaleController.dispose();
-    _faceDetector.close();
+    FaceDetectorSingleton().close(); // pastikan hanya close sekali
     _nameController.dispose();
     super.dispose();
   }
@@ -338,126 +338,156 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
               ),
               // Konten utama scrollable
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Column(
-                    children: [
-                      // Date Display
-                      ScaleTransition(
-                        scale: _scaleAnimation,
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 4),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFF81C784),
-                                Color(0xFF66BB6A),
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    // Reset semua state dan variabel
+                    setState(() {
+                      users.clear();
+                      isMatching = false;
+                      trialNumber = 1;
+                      loggingUser = null;
+                      _canAuthenticate = false;
+                      _faceFeatures = null;
+                    });
+
+                    // Reset image1 dan image2
+                    image1 = regula.MatchFacesImage();
+                    image2 = regula.MatchFacesImage();
+
+                    // Tampilkan pesan refresh
+                    showToast('Halaman telah di-refresh!', isError: false);
+
+                    // Delay sebentar untuk animasi
+                    await Future.delayed(const Duration(milliseconds: 500));
+                  },
+                  color: const Color(0xFF2E7D32),
+                  backgroundColor: Colors.white,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      children: [
+                        // Date Display
+                        ScaleTransition(
+                          scale: _scaleAnimation,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFF81C784),
+                                  Color(0xFF66BB6A),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      const Color(0xFF81C784).withOpacity(0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 6),
+                                ),
                               ],
                             ),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF81C784).withOpacity(0.3),
-                                blurRadius: 12,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(
-                                  Icons.calendar_today,
-                                  color: Colors.white,
-                                  size: 16,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text(
-                                      'Hari Ini',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    Text(
-                                      _formatDate(DateTime.now()),
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // Main Content
-                      FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(6),
-                            child: Column(
+                            child: Row(
                               children: [
-                                // Camera View
-                                CameraView(
-                                  onImage: (image) {
-                                    _setImage(image);
-                                  },
-                                  onInputImage: (inputImage) async {
-                                    setState(() => isMatching = true);
-                                    _faceFeatures = await extractFaceFeatures(
-                                        inputImage, _faceDetector);
-                                    setState(() => isMatching = false);
-                                  },
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                    Icons.calendar_today,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
                                 ),
-                                const SizedBox(height: 4),
-                                // Status and Button Section
-                                _buildActionSection(),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
+                                        'Hari Ini',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        _formatDate(DateTime.now()),
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      // Petunjuk Presensi
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        child: _buildPetunjukPresensi(),
-                      ),
-                    ],
+                        // Main Content
+                        FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: Column(
+                                children: [
+                                  // Camera View
+                                  CameraView(
+                                    onImage: (image) {
+                                      _setImage(image);
+                                    },
+                                    onInputImage: (inputImage) async {
+                                      setState(() => isMatching = true);
+                                      _faceFeatures = await extractFaceFeatures(
+                                          inputImage,
+                                          FaceDetectorSingleton().faceDetector);
+                                      setState(() => isMatching = false);
+                                    },
+                                  ),
+                                  const SizedBox(height: 4),
+                                  // Status and Button Section
+                                  _buildActionSection(),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        // Petunjuk Presensi
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          child: _buildPetunjukPresensi(),
+                        ),
+                        // Tambahkan space ekstra untuk pull-to-refresh
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -775,11 +805,8 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     });
   }
 
-  _showFailureDialog({
-    required String title,
-    required String description,
-  }) {
-    setState(() => isMatching = false);
+  void _showFailureDialog(
+      {required String title, required String description}) {
     showDialog(
       context: context,
       builder: (context) {
@@ -791,30 +818,32 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
             title,
             style: const TextStyle(
               fontWeight: FontWeight.bold,
-              color: Color(0xFFEF4444),
+              color: Color(0xFFFF7043),
             ),
-            textAlign: TextAlign.center,
           ),
           content: Text(
             description,
-            style: const TextStyle(color: Color(0xFF6B7280)),
+            style: const TextStyle(
+              fontSize: 16,
+              color: Color(0xFF6B7280),
+            ),
           ),
           actions: [
-            ElevatedButton(
+            TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
+                // Navigasi ke halaman AuthenticateScreen (halaman presensi/foto ulang)
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => const AuthenticateScreen(),
+                  ),
+                );
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF81C784),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
               child: const Text(
-                "OK",
+                'OK',
                 style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF2E7D32), // hijau, bukan merah
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -998,12 +1027,6 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   }
 
   /// Data Members
-  final FaceDetector _faceDetector = FaceDetector(
-    options: FaceDetectorOptions(
-      enableLandmarks: true,
-      performanceMode: FaceDetectorMode.accurate,
-    ),
-  );
   // ignore: unused_field
   FaceFeatures? _faceFeatures;
   var image1 = regula.MatchFacesImage();
@@ -1017,4 +1040,28 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   UserModel? loggingUser;
   bool isMatching = false;
   int trialNumber = 1;
+}
+
+// Tambahkan singleton untuk FaceDetector
+class FaceDetectorSingleton {
+  static final FaceDetectorSingleton _instance =
+      FaceDetectorSingleton._internal();
+  late final FaceDetector faceDetector;
+
+  factory FaceDetectorSingleton() {
+    return _instance;
+  }
+
+  FaceDetectorSingleton._internal() {
+    faceDetector = FaceDetector(
+      options: FaceDetectorOptions(
+        enableLandmarks: true,
+        performanceMode: FaceDetectorMode.accurate,
+      ),
+    );
+  }
+
+  void close() {
+    faceDetector.close();
+  }
 }

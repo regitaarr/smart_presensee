@@ -359,6 +359,7 @@ class _AdminAttendanceListState extends State<AdminAttendanceList> {
                         itemBuilder: (context, index) {
                           final attendance = filteredAttendanceList[index];
                           return Card(
+                            color: Colors.white,
                             margin: const EdgeInsets.only(bottom: 12),
                             elevation: 2,
                             shape: RoundedRectangleBorder(

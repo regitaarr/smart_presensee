@@ -339,6 +339,13 @@ class _DashboardScreenState extends State<DashboardPage>
     });
   }
 
+  Future<void> _refreshData() async {
+    await Future.wait([
+      _loadTodaySchedule(),
+      _loadAttendanceStatistics(),
+    ]);
+  }
+
   Widget _buildAttendanceStatisticsCard() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -398,15 +405,6 @@ class _DashboardScreenState extends State<DashboardPage>
                     ),
                   ],
                 ),
-              ),
-              IconButton(
-                onPressed: _loadAttendanceStatistics,
-                icon: const Icon(
-                  Icons.refresh,
-                  color: Color(0xFF81C784),
-                  size: 20,
-                ),
-                tooltip: 'Refresh Data',
               ),
             ],
           ),
@@ -1033,33 +1031,6 @@ class _DashboardScreenState extends State<DashboardPage>
                           ],
                         ),
                       ),
-
-                      // Refresh button
-                      GestureDetector(
-                        onTap: () {
-                          _loadTodaySchedule();
-                          _loadAttendanceStatistics();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.refresh,
-                            color: Color(0xFF81C784),
-                            size: 24,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -1069,58 +1040,62 @@ class _DashboardScreenState extends State<DashboardPage>
               Expanded(
                 child: SlideTransition(
                   position: _slideAnimation,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        // Logo and title
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Column(
-                            children: [
-                              Image.asset(
-                                'assets/images/logo1.png',
-                                width: 120,
-                                height: 120,
-                              ),
-                              const SizedBox(height: 20),
-                              const Text(
-                                'SMART PRESENSEE',
-                                style: TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF36C340),
-                                  letterSpacing: 1.2,
+                  child: RefreshIndicator(
+                    onRefresh: _refreshData,
+                    color: const Color(0xFF4CAF50),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          // Logo and title
+                          Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              children: [
+                                Image.asset(
+                                  'assets/images/logo1.png',
+                                  width: 120,
+                                  height: 120,
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Absen Digital. Sekolah Makin Pintar!',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFFFC107),
-                                  letterSpacing: 1.0,
+                                const SizedBox(height: 20),
+                                const Text(
+                                  'SMART PRESENSEE',
+                                  style: TextStyle(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF36C340),
+                                    letterSpacing: 1.2,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Absen Digital. Sekolah Makin Pintar!',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFFFC107),
+                                    letterSpacing: 1.0,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
 
-                        const SizedBox(height: 16),
+                          const SizedBox(height: 16),
 
-                        // Schedule Card
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 24),
-                          child: _buildScheduleCard(),
-                        ),
+                          // Schedule Card
+                          Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 24),
+                            child: _buildScheduleCard(),
+                          ),
 
-                        const SizedBox(height: 16),
+                          const SizedBox(height: 16),
 
-                        // Attendance Statistics Card
-                        _buildAttendanceStatisticsCard(),
+                          // Attendance Statistics Card
+                          _buildAttendanceStatisticsCard(),
 
-                        const SizedBox(height: 24),
-                      ],
+                          const SizedBox(height: 24),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1151,8 +1126,7 @@ class _DashboardScreenState extends State<DashboardPage>
             switch (index) {
               case 0:
                 // Already on dashboard - refresh data
-                _loadTodaySchedule();
-                _loadAttendanceStatistics();
+                _refreshData();
                 setState(() {
                   _selectedIndex = 0;
                 });
@@ -1195,7 +1169,7 @@ class _DashboardScreenState extends State<DashboardPage>
                     ),
                   ),
                 ).then((_) {
-                  _loadTodaySchedule();
+                  _refreshData();
                   setState(() {
                     _selectedIndex = 0;
                   });

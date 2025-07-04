@@ -31,11 +31,38 @@ class _AdminUserListState extends State<AdminUserList> {
       QuerySnapshot snapshot =
           await FirebaseFirestore.instance.collection('pengguna').get();
       List<Map<String, dynamic>> tempList = [];
+
       for (var doc in snapshot.docs) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
         data['id'] = doc.id;
+
+        // Jika role adalah walikelas, ambil data kelas yang diampu
+        if (data['role'] == 'walikelas') {
+          try {
+            QuerySnapshot walikelasSnapshot = await FirebaseFirestore.instance
+                .collection('walikelas')
+                .where('id_pengguna', isEqualTo: data['id_pengguna'])
+                .limit(1)
+                .get();
+
+            if (walikelasSnapshot.docs.isNotEmpty) {
+              Map<String, dynamic> walikelasData =
+                  walikelasSnapshot.docs.first.data() as Map<String, dynamic>;
+              data['kelas_diampu'] = walikelasData['kelasku'] ?? 'Belum diisi';
+              data['nip'] = walikelasData['nip'] ?? 'Belum diisi';
+            } else {
+              data['kelas_diampu'] = 'Belum diisi';
+              data['nip'] = 'Belum diisi';
+            }
+          } catch (e) {
+            data['kelas_diampu'] = 'Error loading data';
+            data['nip'] = 'Error loading data';
+          }
+        }
+
         tempList.add(data);
       }
+
       setState(() {
         userList = tempList;
         _applyFilter();
@@ -184,6 +211,43 @@ class _AdminUserListState extends State<AdminUserList> {
                   if (newValue != null) role = newValue;
                 },
               ),
+              // Tampilkan informasi kelas untuk wali kelas (read-only)
+              if (user['role'] == 'walikelas') ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Informasi Wali Kelas (Tidak Dapat Diubah)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text('NIP: ${user['nip'] ?? 'Belum diisi'}',
+                          style:
+                              TextStyle(fontSize: 14, color: Colors.grey[600])),
+                      const SizedBox(height: 4),
+                      Text(
+                          'Kelas yang Diampu: ${user['kelas_diampu'] ?? 'Belum diisi'}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          )),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -411,10 +475,26 @@ class _AdminUserListState extends State<AdminUserList> {
                                           color: Colors.grey[600],
                                           fontSize: 14)),
                                   const SizedBox(height: 4),
-                                  Text('Role: ${user['role'] ?? '-'}',
+                                  Text(
+                                      'Role: ${_formatRoleForDisplay(user['role'] ?? '-')}',
                                       style: TextStyle(
                                           color: Colors.grey[600],
                                           fontSize: 14)),
+                                  // Tampilkan informasi kelas untuk wali kelas
+                                  if (user['role'] == 'walikelas') ...[
+                                    const SizedBox(height: 4),
+                                    Text('NIP: ${user['nip'] ?? '-'}',
+                                        style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 14)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                        'Kelas yang Diampu: ${user['kelas_diampu'] ?? '-'}',
+                                        style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500)),
+                                  ],
                                 ],
                               ),
                               trailing: Row(

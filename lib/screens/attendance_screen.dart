@@ -840,7 +840,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         children: [
           // Date selector
           Container(
-            margin: const EdgeInsets.all(16),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -895,7 +895,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
           // Search and filters
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -1049,6 +1049,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ? _buildEmptyState()
                       : RefreshIndicator(
                           onRefresh: _loadStudentData,
+                          color: const Color(0xFF4CAF50),
                           child: ListView.builder(
                             padding: const EdgeInsets.all(16),
                             itemCount: filteredStudentList.length,
@@ -1061,11 +1062,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _loadStudentData,
-        backgroundColor: const Color(0xFF4CAF50),
-        child: const Icon(Icons.refresh, color: Colors.white),
       ),
     );
   }
@@ -2042,18 +2038,13 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
             icon: const Icon(Icons.add, color: Colors.white),
             tooltip: 'Tambah Presensi Manual',
           ),
-          IconButton(
-            onPressed: _loadAttendanceHistory,
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            tooltip: 'Refresh',
-          ),
         ],
       ),
       body: Column(
         children: [
           // Student info header
           Container(
-            margin: const EdgeInsets.all(16),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -2178,7 +2169,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
           // Search and Filter
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,

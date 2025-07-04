@@ -177,6 +177,12 @@ class _ProfileScreenState extends State<ProfileScreen>
     return '${date.day} ${months[date.month]} ${date.year}';
   }
 
+  Future<void> _refreshData() async {
+    await Future.wait([
+      _loadUserProfile(),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -216,29 +222,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF2E7D32),
-                          ),
-                        ),
-                      ),
-                      // Refresh button
-                      GestureDetector(
-                        onTap: _loadUserProfile,
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.refresh,
-                            color: Color(0xFF2E7D32),
-                            size: 24,
                           ),
                         ),
                       ),
@@ -376,25 +359,29 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildProfileContent() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        children: [
-          // Profile Header
-          _buildProfileHeader(),
-          const SizedBox(height: 32),
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      color: const Color(0xFF4CAF50),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          children: [
+            // Profile Header
+            _buildProfileHeader(),
+            const SizedBox(height: 32),
 
-          // Profile Information
-          _buildProfileInformation(),
-          const SizedBox(height: 32),
+            // Profile Information
+            _buildProfileInformation(),
+            const SizedBox(height: 32),
 
-          // Action Buttons
-          _buildActionButtons(),
-          const SizedBox(height: 24),
+            // Action Buttons
+            _buildActionButtons(),
+            const SizedBox(height: 24),
 
-          // Logout Button
-          _buildLogoutButton(),
-        ],
+            // Logout Button
+            _buildLogoutButton(),
+          ],
+        ),
       ),
     );
   }
@@ -607,7 +594,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         _buildModernActionButton(
           icon: Icons.edit_outlined,
           title: 'Edit Profil',
-          subtitle: 'Ubah nama, NIP, dan kelas',
+          subtitle: 'Ubah nama, NIP, kelas, dan nomor Whatsapp',
           gradient: const [Color(0xFF81C784), Color(0xFF66BB6A)],
           onTap: _showEditProfileDialog,
         ),

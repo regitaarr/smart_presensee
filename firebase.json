@@ -1,1 +1,27 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"smart-presensee-app","appId":"1:1026089126045:android:060e91f22ffdd843fb2c74","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"smart-presensee-app","configurations":{"android":"1:1026089126045:android:060e91f22ffdd843fb2c74","ios":"1:1026089126045:ios:9f26cb433166ce23fb2c74","web":"1:1026089126045:web:2f6f8b65e6012d19fb2c74"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "smart-presensee-app",
+          "appId": "1:1026089126045:android:060e91f22ffdd843fb2c74",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "smart-presensee-app",
+          "configurations": {
+            "android": "1:1026089126045:android:060e91f22ffdd843fb2c74",
+            "ios": "1:1026089126045:ios:9f26cb433166ce23fb2c74",
+            "web": "1:1026089126045:web:2f6f8b65e6012d19fb2c74"
+          }
+        }
+      }
+    }
+  }
+}

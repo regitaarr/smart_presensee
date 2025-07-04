@@ -248,6 +248,7 @@ class _AdminFaceListState extends State<AdminFaceList> {
                         itemBuilder: (context, index) {
                           final face = filteredFaces[index];
                           return Card(
+                            color: Colors.white,
                             margin: const EdgeInsets.only(bottom: 12),
                             elevation: 2,
                             shape: RoundedRectangleBorder(
