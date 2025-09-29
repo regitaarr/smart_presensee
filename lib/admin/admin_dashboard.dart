@@ -42,6 +42,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     super.initState();
     _loadStatistics();
   }
+  
+  void _navigateToFaceRecognition() {
+    Navigator.pushNamed(context, '/face-recognition');
+  }
 
   Future<void> _loadStatistics() async {
     try {
@@ -554,6 +558,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Icons.description_outlined,
                 Colors.teal,
                 () => setState(() => _selectedIndex = 6),
+              ),
+              _buildActionCard(
+                'Face Recognition',
+                'Presensi dengan pengenalan wajah',
+                Icons.face_retouching_natural,
+                Colors.pink,
+                () => _navigateToFaceRecognition(),
               ),
             ],
           ),

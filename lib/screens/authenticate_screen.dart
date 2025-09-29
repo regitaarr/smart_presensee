@@ -1,4 +1,5 @@
 //authenticate_screen.dart
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:typed_data';
@@ -8,7 +9,7 @@ import 'package:smart_presensee/model/face_features.dart';
 import 'package:smart_presensee/model/user_model.dart';
 import 'package:smart_presensee/screens/authenticated_user_screen.dart';
 import 'package:smart_presensee/services/extract_features.dart';
-import 'package:smart_presensee/widgets/camera_view.dart';
+import 'package:smart_presensee/widgets/realtime_camera_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_face_api/face_api.dart' as regula;
 import 'package:fluttertoast/fluttertoast.dart';
@@ -55,6 +56,10 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     Future.delayed(const Duration(milliseconds: 200), () {
       _scaleController.forward();
     });
+
+    // Realtime mode siap dipakai; muat data wajah terdaftar
+    _loadRegisteredFaces();
+    _canAuthenticate = true; // tampilkan status section
   }
 
   @override
@@ -63,6 +68,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     _scaleController.dispose();
     FaceDetectorSingleton().close(); // pastikan hanya close sekali
     _nameController.dispose();
+    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -336,159 +342,96 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                   ),
                 ),
               ),
-              // Konten utama scrollable
+              // Konten utama: kamera memenuhi layar
               Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () async {
-                    // Reset semua state dan variabel
-                    setState(() {
-                      users.clear();
-                      isMatching = false;
-                      trialNumber = 1;
-                      loggingUser = null;
-                      _canAuthenticate = false;
-                      _faceFeatures = null;
-                    });
-
-                    // Reset image1 dan image2
-                    image1 = regula.MatchFacesImage();
-                    image2 = regula.MatchFacesImage();
-
-                    // Tampilkan pesan refresh
-                    showToast('Halaman telah di-refresh!', isError: false);
-
-                    // Delay sebentar untuk animasi
-                    await Future.delayed(const Duration(milliseconds: 500));
-                  },
-                  color: const Color(0xFF2E7D32),
-                  backgroundColor: Colors.white,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      children: [
-                        // Date Display
-                        ScaleTransition(
-                          scale: _scaleAnimation,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 4),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  Color(0xFF81C784),
-                                  Color(0xFF66BB6A),
-                                ],
+                child: Column(
+                  children: [
+                    // Date Display (kembali ditampilkan)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      child: ScaleTransition(
+                        scale: _scaleAnimation,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFF81C784),
+                                Color(0xFF66BB6A),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF81C784).withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 6),
                               ),
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color:
-                                      const Color(0xFF81C784).withOpacity(0.3),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 6),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Icons.calendar_today,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
+                                child: const Icon(
+                                  Icons.calendar_today,
+                                  color: Colors.white,
+                                  size: 16,
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Text(
-                                        'Hari Ini',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w500,
-                                        ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      'Hari Ini',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
                                       ),
-                                      Text(
-                                        _formatDate(DateTime.now()),
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                    ),
+                                    Text(
+                                      _formatDate(DateTime.now()),
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
-                        // Main Content
-                        FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.08),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 10),
-                                ),
-                              ],
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(6),
-                              child: Column(
-                                children: [
-                                  // Camera View
-                                  CameraView(
-                                    onImage: (image) {
-                                      _setImage(image);
-                                    },
-                                    onInputImage: (inputImage) async {
-                                      setState(() => isMatching = true);
-                                      _faceFeatures = await extractFaceFeatures(
-                                          inputImage,
-                                          FaceDetectorSingleton().faceDetector);
-                                      setState(() => isMatching = false);
-                                    },
-                                  ),
-                                  const SizedBox(height: 4),
-                                  // Status and Button Section
-                                  _buildActionSection(),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        // Petunjuk Presensi
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          child: _buildPetunjukPresensi(),
-                        ),
-                        // Tambahkan space ekstra untuk pull-to-refresh
-                        const SizedBox(height: 20),
-                      ],
+                      ),
                     ),
-                  ),
+                    // Kamera memenuhi layar di bawah banner tanggal
+                    Expanded(
+                      child: RealtimeCameraView(
+                        onFrame: (inputImage, faces) {
+                          _onRealtimeFrame(inputImage, faces);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      child: _buildActionSection(),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: _buildPetunjukPresensi(),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 ),
               ),
             ],
@@ -508,35 +451,228 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     });
   }
 
-  double compareFaces(FaceFeatures face1, FaceFeatures face2) {
-    double distEar1 = euclideanDistance(face1.rightEar!, face1.leftEar!);
-    double distEar2 = euclideanDistance(face2.rightEar!, face2.leftEar!);
-    double ratioEar = distEar1 / distEar2;
-
-    double distEye1 = euclideanDistance(face1.rightEye!, face1.leftEye!);
-    double distEye2 = euclideanDistance(face2.rightEye!, face2.leftEye!);
-    double ratioEye = distEye1 / distEye2;
-
-    double distCheek1 = euclideanDistance(face1.rightCheek!, face1.leftCheek!);
-    double distCheek2 = euclideanDistance(face2.rightCheek!, face2.leftCheek!);
-    double ratioCheek = distCheek1 / distCheek2;
-
-    double distMouth1 = euclideanDistance(face1.rightMouth!, face1.leftMouth!);
-    double distMouth2 = euclideanDistance(face2.rightMouth!, face2.leftMouth!);
-    double ratioMouth = distMouth1 / distMouth2;
-
-    double distNoseToMouth1 =
-        euclideanDistance(face1.noseBase!, face1.bottomMouth!);
-    double distNoseToMouth2 =
-        euclideanDistance(face2.noseBase!, face2.bottomMouth!);
-    double ratioNoseToMouth = distNoseToMouth1 / distNoseToMouth2;
-
-    double ratio =
-        (ratioEye + ratioEar + ratioCheek + ratioMouth + ratioNoseToMouth) / 5;
-    log(ratio.toString(), name: "Ratio");
-
-    return ratio;
+  double? _distance(Points? a, Points? b) {
+    if (a == null || b == null) return null;
+    if (a.x == null || a.y == null || b.x == null || b.y == null) return null;
+    return euclideanDistance(a, b);
   }
+
+  // Skor kemiripan berbasis beberapa metrik; semakin kecil semakin mirip (0 ideal)
+  double? computeSimilarityScore(FaceFeatures faceA, FaceFeatures faceB) {
+    final List<double> diffs = [];
+
+    final eyeA = _distance(faceA.rightEye, faceA.leftEye);
+    final eyeB = _distance(faceB.rightEye, faceB.leftEye);
+    if (eyeA != null && eyeB != null && eyeA > 0 && eyeB > 0) {
+      diffs.add(((eyeA / eyeB) - 1.0).abs());
+    }
+
+    final mouthA = _distance(faceA.rightMouth, faceA.leftMouth);
+    final mouthB = _distance(faceB.rightMouth, faceB.leftMouth);
+    if (mouthA != null && mouthB != null && mouthA > 0 && mouthB > 0) {
+      diffs.add(((mouthA / mouthB) - 1.0).abs());
+    }
+
+    final noseMouthA = _distance(faceA.noseBase, faceA.bottomMouth);
+    final noseMouthB = _distance(faceB.noseBase, faceB.bottomMouth);
+    if (noseMouthA != null && noseMouthB != null && noseMouthA > 0 && noseMouthB > 0) {
+      diffs.add(((noseMouthA / noseMouthB) - 1.0).abs());
+    }
+
+    final cheekA = _distance(faceA.rightCheek, faceA.leftCheek);
+    final cheekB = _distance(faceB.rightCheek, faceB.leftCheek);
+    if (cheekA != null && cheekB != null && cheekA > 0 && cheekB > 0) {
+      diffs.add(((cheekA / cheekB) - 1.0).abs());
+    }
+
+    // Ears optional; tambahkan jika ada
+    final earA = _distance(faceA.rightEar, faceA.leftEar);
+    final earB = _distance(faceB.rightEar, faceB.leftEar);
+    if (earA != null && earB != null && earA > 0 && earB > 0) {
+      diffs.add(((earA / earB) - 1.0).abs());
+    }
+
+    if (diffs.isEmpty) return null;
+    final score = diffs.reduce((a, b) => a + b) / diffs.length;
+    log(score.toStringAsFixed(4), name: 'SimilarityScore');
+    return score;
+  }
+  // Realtime matching state & logic
+  final List<UserModel> _registeredUsers = [];
+  bool _isLoadingUsers = false;
+  DateTime? _lastMatchAttempt;
+  bool _hasCompletedAttendance = false;
+
+  Future<void> _loadRegisteredFaces() async {
+    if (_isLoadingUsers) return;
+    setState(() {
+      _isLoadingUsers = true;
+    });
+    try {
+      final snap = await FirebaseFirestore.instance.collection('wajah_siswa').get();
+      _registeredUsers.clear();
+      for (var doc in snap.docs) {
+        final user = UserModel.fromJson(doc.data());
+        if (user.faceFeatures != null && user.nisn != null) {
+          _registeredUsers.add(user);
+        }
+      }
+      log('Loaded registered faces: ${_registeredUsers.length}');
+    } catch (e) {
+      log('Error loading registered faces: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingUsers = false;
+        });
+      }
+    }
+  }
+
+  void _onRealtimeFrame(InputImage inputImage, List<Face> faces) async {
+    if (!mounted) return;
+    if (_hasCompletedAttendance) return;
+    if (_inConfirmation) return;
+    if (faces.isEmpty) return;
+
+    final now = DateTime.now();
+    if (_lastMatchAttempt != null &&
+        now.difference(_lastMatchAttempt!).inMilliseconds < 500) {
+      return; // throttle
+    }
+    _lastMatchAttempt = now;
+
+    if (_registeredUsers.isEmpty && !_isLoadingUsers) {
+      await _loadRegisteredFaces();
+      if (_registeredUsers.isEmpty) return;
+    }
+
+    setState(() => isMatching = true);
+    try {
+      // Gunakan hasil deteksi cepat dari onFrame (faces) jika tersedia untuk
+      // menghindari pemrosesan ulang ML Kit yang mahal.
+      FaceFeatures? features;
+      if (faces.isNotEmpty) {
+        features = extractFaceFeaturesFromFace(faces.first);
+      }
+      features ??=
+          await extractFaceFeatures(inputImage, FaceDetectorSingleton().faceDetector);
+      if (features == null) {
+        setState(() => isMatching = false);
+        return;
+      }
+
+      double bestScore = double.infinity; // semakin kecil semakin mirip
+      UserModel? bestUser;
+
+      for (final user in _registeredUsers) {
+        try {
+          final stored = user.faceFeatures!;
+          final score = computeSimilarityScore(features, stored);
+          if (score != null && score < bestScore) {
+            bestScore = score;
+            bestUser = user;
+          }
+        } catch (_) {
+          // skip jika data tidak lengkap
+        }
+      }
+
+      // Ambang batas konservatif; bisa di-tuning setelah uji coba lapangan
+      if (bestUser != null && bestScore < 0.20) {
+        _startConfirmation(bestUser);
+      }
+    } catch (e) {
+      log('Realtime match error: $e');
+    } finally {
+      if (mounted) setState(() => isMatching = false);
+    }
+  }
+
+  // Konfirmasi otomatis sebelum menyimpan
+  UserModel? _candidateMatch;
+  String? _candidateStudentName;
+  int _countdown = 3;
+  Timer? _countdownTimer;
+  bool _inConfirmation = false;
+
+  Future<void> _startConfirmation(UserModel bestUser) async {
+    if (_inConfirmation || _hasCompletedAttendance) return;
+    setState(() {
+      _candidateMatch = bestUser;
+      _inConfirmation = true;
+      _countdown = 3;
+    });
+
+    // Muat nama siswa dari koleksi 'siswa'
+    try {
+      if (bestUser.nisn != null) {
+        final doc = await FirebaseFirestore.instance
+            .collection('siswa')
+            .doc(bestUser.nisn)
+            .get();
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>;
+          setState(() {
+            _candidateStudentName = data['nama_siswa'] as String?;
+          });
+        }
+      }
+    } catch (_) {}
+
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(milliseconds: 700), (t) async {
+      if (!mounted) return;
+      if (_countdown <= 1) {
+        t.cancel();
+        await _confirmAndSave();
+      } else {
+        setState(() {
+          _countdown -= 1;
+        });
+      }
+    });
+  }
+
+  Future<void> _confirmAndSave() async {
+    final user = _candidateMatch;
+    if (user == null) {
+      setState(() {
+        _inConfirmation = false;
+      });
+      return;
+    }
+    final saved = await _saveAttendanceRecord(user);
+    if (saved) {
+      _hasCompletedAttendance = true;
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => AuthenticatedUserScreen(
+            user: user,
+            attendanceAlreadySaved: true,
+          ),
+        ),
+      );
+    } else {
+      if (!mounted) return;
+      setState(() {
+        _inConfirmation = false;
+        _candidateMatch = null;
+        _candidateStudentName = null;
+      });
+    }
+  }
+
+  void _cancelConfirmation() {
+    _countdownTimer?.cancel();
+    setState(() {
+      _inConfirmation = false;
+      _candidateMatch = null;
+      _candidateStudentName = null;
+    });
+  }
+
 
   double euclideanDistance(Points p1, Points p2) {
     final sqr =
@@ -855,6 +991,65 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
   Widget _buildActionSection() {
     if (_canAuthenticate) {
+      if (_inConfirmation) {
+        return Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8F5E8),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF81C784)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF81C784).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.check, color: Color(0xFF2E7D32), size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Wajah terdeteksi',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF2E7D32),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_candidateStudentName ?? 'NISN: ${_candidateMatch?.nisn ?? '-'}'} · Absen otomatis dalam $_countdown dtk',
+                      style: const TextStyle(fontSize: 14, color: Color(0xFF374151)),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: _cancelConfirmation,
+                child: const Text('Batal', style: TextStyle(color: Color(0xFF6B7280))),
+              ),
+              const SizedBox(width: 4),
+              ElevatedButton(
+                onPressed: _confirmAndSave,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF66BB6A),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Absen Sekarang', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      }
+
       return isMatching
           ? Container(
               padding: const EdgeInsets.all(8),
@@ -1057,6 +1252,7 @@ class FaceDetectorSingleton {
       options: FaceDetectorOptions(
         enableLandmarks: true,
         performanceMode: FaceDetectorMode.accurate,
+        minFaceSize: 0.05,
       ),
     );
   }
