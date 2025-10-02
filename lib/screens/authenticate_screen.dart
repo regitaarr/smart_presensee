@@ -460,29 +460,85 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   // Skor kemiripan berbasis beberapa metrik; semakin kecil semakin mirip (0 ideal)
   double? computeSimilarityScore(FaceFeatures faceA, FaceFeatures faceB) {
     final List<double> diffs = [];
+    
+    // Validasi: pastikan minimal ada 4 landmark yang terdeteksi
+    int validLandmarks = 0;
+    if (faceA.rightEye?.x != null && faceA.leftEye?.x != null) validLandmarks++;
+    if (faceA.rightMouth?.x != null && faceA.leftMouth?.x != null) validLandmarks++;
+    if (faceA.noseBase?.x != null) validLandmarks++;
+    if (faceA.rightCheek?.x != null && faceA.leftCheek?.x != null) validLandmarks++;
+    
+    if (validLandmarks < 3) {
+      log('Insufficient landmarks detected: $validLandmarks', name: 'FaceMatch');
+      return null;
+    }
 
+    // 1. Jarak antar mata (horizontal)
     final eyeA = _distance(faceA.rightEye, faceA.leftEye);
     final eyeB = _distance(faceB.rightEye, faceB.leftEye);
     if (eyeA != null && eyeB != null && eyeA > 0 && eyeB > 0) {
       diffs.add(((eyeA / eyeB) - 1.0).abs());
     }
 
+    // 2. Jarak antar mulut (horizontal)
     final mouthA = _distance(faceA.rightMouth, faceA.leftMouth);
     final mouthB = _distance(faceB.rightMouth, faceB.leftMouth);
     if (mouthA != null && mouthB != null && mouthA > 0 && mouthB > 0) {
       diffs.add(((mouthA / mouthB) - 1.0).abs());
     }
 
+    // 3. Jarak hidung ke mulut (vertical)
     final noseMouthA = _distance(faceA.noseBase, faceA.bottomMouth);
     final noseMouthB = _distance(faceB.noseBase, faceB.bottomMouth);
     if (noseMouthA != null && noseMouthB != null && noseMouthA > 0 && noseMouthB > 0) {
       diffs.add(((noseMouthA / noseMouthB) - 1.0).abs());
     }
 
+    // 4. Jarak antar pipi (horizontal) 
     final cheekA = _distance(faceA.rightCheek, faceA.leftCheek);
     final cheekB = _distance(faceB.rightCheek, faceB.leftCheek);
     if (cheekA != null && cheekB != null && cheekA > 0 && cheekB > 0) {
       diffs.add(((cheekA / cheekB) - 1.0).abs());
+    }
+
+    // 5. Jarak mata kanan ke hidung
+    final rightEyeNoseA = _distance(faceA.rightEye, faceA.noseBase);
+    final rightEyeNoseB = _distance(faceB.rightEye, faceB.noseBase);
+    if (rightEyeNoseA != null && rightEyeNoseB != null && rightEyeNoseA > 0 && rightEyeNoseB > 0) {
+      diffs.add(((rightEyeNoseA / rightEyeNoseB) - 1.0).abs());
+    }
+
+    // 6. Jarak mata kiri ke hidung
+    final leftEyeNoseA = _distance(faceA.leftEye, faceA.noseBase);
+    final leftEyeNoseB = _distance(faceB.leftEye, faceB.noseBase);
+    if (leftEyeNoseA != null && leftEyeNoseB != null && leftEyeNoseA > 0 && leftEyeNoseB > 0) {
+      diffs.add(((leftEyeNoseA / leftEyeNoseB) - 1.0).abs());
+    }
+
+    // 7. Rasio lebar wajah (mata) dengan tinggi wajah (mata ke mulut)
+    final widthA = _distance(faceA.rightEye, faceA.leftEye);
+    final heightA = _distance(faceA.rightEye, faceA.bottomMouth);
+    final widthB = _distance(faceB.rightEye, faceB.leftEye);
+    final heightB = _distance(faceB.rightEye, faceB.bottomMouth);
+    if (widthA != null && heightA != null && widthB != null && heightB != null &&
+        widthA > 0 && heightA > 0 && widthB > 0 && heightB > 0) {
+      final ratioA = widthA / heightA;
+      final ratioB = widthB / heightB;
+      diffs.add(((ratioA / ratioB) - 1.0).abs());
+    }
+
+    // 8. Jarak mata kanan ke pipi kanan
+    final rightEyeCheekA = _distance(faceA.rightEye, faceA.rightCheek);
+    final rightEyeCheekB = _distance(faceB.rightEye, faceB.rightCheek);
+    if (rightEyeCheekA != null && rightEyeCheekB != null && rightEyeCheekA > 0 && rightEyeCheekB > 0) {
+      diffs.add(((rightEyeCheekA / rightEyeCheekB) - 1.0).abs());
+    }
+
+    // 9. Jarak mata kiri ke pipi kiri
+    final leftEyeCheekA = _distance(faceA.leftEye, faceA.leftCheek);
+    final leftEyeCheekB = _distance(faceB.leftEye, faceB.leftCheek);
+    if (leftEyeCheekA != null && leftEyeCheekB != null && leftEyeCheekA > 0 && leftEyeCheekB > 0) {
+      diffs.add(((leftEyeCheekA / leftEyeCheekB) - 1.0).abs());
     }
 
     // Ears optional; tambahkan jika ada
@@ -492,9 +548,13 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       diffs.add(((earA / earB) - 1.0).abs());
     }
 
-    if (diffs.isEmpty) return null;
+    if (diffs.isEmpty || diffs.length < 3) {
+      log('Insufficient face metrics: ${diffs.length}', name: 'FaceMatch');
+      return null;
+    }
+    
     final score = diffs.reduce((a, b) => a + b) / diffs.length;
-    log(score.toStringAsFixed(4), name: 'SimilarityScore');
+    log('Score: ${score.toStringAsFixed(4)} (${diffs.length} metrics)', name: 'SimilarityScore');
     return score;
   }
   // Realtime matching state & logic
@@ -564,23 +624,39 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
       double bestScore = double.infinity; // semakin kecil semakin mirip
       UserModel? bestUser;
+      int validComparisonCount = 0; // Hitung berapa banyak perbandingan valid
 
       for (final user in _registeredUsers) {
         try {
           final stored = user.faceFeatures!;
           final score = computeSimilarityScore(features, stored);
-          if (score != null && score < bestScore) {
-            bestScore = score;
-            bestUser = user;
+          if (score != null) {
+            validComparisonCount++;
+            log('Comparing with NISN ${user.nisn}: score = ${score.toStringAsFixed(4)}', name: 'FaceMatch');
+            if (score < bestScore) {
+              bestScore = score;
+              bestUser = user;
+            }
           }
-        } catch (_) {
+        } catch (e) {
+          log('Error comparing with user ${user.nisn}: $e', name: 'FaceMatch');
           // skip jika data tidak lengkap
         }
       }
 
-      // Ambang batas konservatif; bisa di-tuning setelah uji coba lapangan
-      if (bestUser != null && bestScore < 0.20) {
+      log('Best match: ${bestUser?.nisn ?? "none"} with score: ${bestScore.toStringAsFixed(4)} (from $validComparisonCount comparisons)', name: 'FaceMatch');
+
+      // Ambang batas SANGAT KETAT untuk mencegah false positive
+      // Threshold 0.055 = sangat sangat ketat, hanya wajah identik yang diterima
+      const double strictThreshold = 0.055;
+      
+      if (bestUser != null && bestScore < strictThreshold) {
+        log('✓ Face matched! Score: ${bestScore.toStringAsFixed(4)} for NISN: ${bestUser.nisn}', name: 'FaceMatch');
         _startConfirmation(bestUser);
+      } else if (bestUser != null && bestScore < 0.12) {
+        log('✗ Face similarity too low: ${bestScore.toStringAsFixed(4)} (threshold: $strictThreshold) - REJECTED', name: 'FaceMatch');
+      } else {
+        log('✗ No matching face found. Best score: ${bestScore.toStringAsFixed(4)}', name: 'FaceMatch');
       }
     } catch (e) {
       log('Realtime match error: $e');
@@ -746,8 +822,10 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         dynamic value = await regula.FaceSDK.matchFaces(jsonEncode(request));
 
         var response = regula.MatchFacesResponse.fromJson(json.decode(value));
+        
+        // Threshold dinaikkan ke 0.85 (dari 0.75) untuk mengurangi false positive
         dynamic str = await regula.FaceSDK.matchFacesSimilarityThresholdSplit(
-            jsonEncode(response!.results), 0.75);
+            jsonEncode(response!.results), 0.85);
 
         var split = regula.MatchFacesSimilarityThresholdSplit.fromJson(
             json.decode(str));
@@ -761,10 +839,12 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
             bestMatch = user.first as UserModel;
           }
 
-          if (similarity > 85.00) {
+          // Threshold dinaikkan ke 92% (dari 85%) untuk mencegah false positive
+          // Hanya wajah yang sangat mirip yang akan diterima
+          if (similarity > 92.00) {
             faceMatched = true;
             loggingUser = user.first;
-            log('Face matched for user: ${loggingUser?.name}, NISN: ${loggingUser?.nisn}');
+            log('✓ Face matched for NISN: ${loggingUser?.nisn} with similarity: $similarity%');
 
             // Save attendance for the matched user
             log('Attempting to save attendance record...');
@@ -796,6 +876,8 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
               );
             }
             break;
+          } else {
+            log('✗ Face similarity too low: $similarity% (threshold: 92%) for NISN: ${(user.first as UserModel).nisn}');
           }
         }
       } catch (e) {
@@ -806,7 +888,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
     if (!faceMatched) {
       if (bestMatch != null) {
-        log('Best match found with similarity: $highestSimilarity%');
+        log('✗ No match found. Best candidate: ${bestMatch.nisn} with similarity: $highestSimilarity% (below threshold)');
+      } else {
+        log('✗ No matching faces detected');
       }
 
       if (trialNumber == 4) {
