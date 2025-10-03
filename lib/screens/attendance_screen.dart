@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:smart_presensee/screens/student_screen.dart';
+import 'package:smart_presensee/services/email_service.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:csv/csv.dart';
@@ -504,6 +505,52 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
+  // Kirim email notifikasi untuk presensi manual (izin/sakit)
+  Future<void> _sendEmailNotificationManual(
+      String nisn, String status, DateTime attendanceTime) async {
+    try {
+      // Get student data untuk nama dan email orang tua
+      DocumentSnapshot studentDoc =
+          await FirebaseFirestore.instance.collection('siswa').doc(nisn).get();
+
+      if (!studentDoc.exists) {
+        log('❌ Student not found for NISN: $nisn');
+        return;
+      }
+
+      Map<String, dynamic> studentData =
+          studentDoc.data() as Map<String, dynamic>;
+      String studentName = studentData['nama_siswa'] ?? 'Siswa';
+      String? emailOrangtua = studentData['email_orangtua'];
+      String? kelas = studentData['kelas_sw'];
+
+      if (emailOrangtua == null || emailOrangtua.isEmpty) {
+        log('⚠️ Email orang tua tidak tersedia untuk $studentName (NISN: $nisn)');
+        return;
+      }
+
+      log('📧 Sending email notification to: $emailOrangtua for $studentName (Status: $status)');
+
+      // Kirim email
+      bool emailSent = await EmailService.sendAttendanceNotification(
+        studentName: studentName,
+        nisn: nisn,
+        parentEmail: emailOrangtua,
+        attendanceStatus: status,
+        attendanceTime: attendanceTime,
+        className: kelas,
+      );
+
+      if (emailSent) {
+        log('✅ Email notifikasi berhasil dikirim ke $emailOrangtua');
+      } else {
+        log('❌ Gagal mengirim email notifikasi ke $emailOrangtua');
+      }
+    } catch (e) {
+      log('❌ Error saat kirim email notifikasi: $e');
+    }
+  }
+
   // Save quick manual attendance
   Future<void> _saveQuickManualAttendance(String nisn, String status) async {
     try {
@@ -530,6 +577,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             });
 
             _showToast('Status presensi berhasil diupdate');
+            
+            // Kirim email notifikasi untuk status izin dan sakit
+            if (status == 'izin' || status == 'sakit') {
+              _sendEmailNotificationManual(nisn, status, recordDate);
+            }
+            
             await _loadStudentData();
             return;
           }
@@ -560,6 +613,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       });
 
       _showToast('Presensi manual berhasil ditambahkan');
+      
+      // Kirim email notifikasi ke orang tua untuk status izin dan sakit
+      if (status == 'izin' || status == 'sakit') {
+        _sendEmailNotificationManual(nisn, status, attendanceDateTime);
+      }
+      
       await _loadStudentData();
     } catch (e) {
       log('Error saving quick manual attendance: $e');
@@ -1292,8 +1351,27 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         TextEditingController(text: student.nama);
     final TextEditingController nisnController =
         TextEditingController(text: student.nisn);
+    final TextEditingController emailOrangtuaController =
+        TextEditingController();
+    final TextEditingController telpOrangtuaController =
+        TextEditingController();
     String selectedClass = student.kelas;
     String selectedGender = student.jenisKelamin;
+
+    // Load existing parent contact info
+    try {
+      DocumentSnapshot studentDoc = await FirebaseFirestore.instance
+          .collection('siswa')
+          .doc(student.nisn)
+          .get();
+      if (studentDoc.exists) {
+        Map<String, dynamic> data = studentDoc.data() as Map<String, dynamic>;
+        emailOrangtuaController.text = data['email_orangtua'] ?? '';
+        telpOrangtuaController.text = data['telp_orangtua'] ?? '';
+      }
+    } catch (e) {
+      log('Error loading parent contact: $e');
+    }
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1395,6 +1473,45 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         });
                       },
                     ),
+                    const SizedBox(height: 20),
+
+                    // Divider for Parent Contact Info
+                    const Divider(thickness: 1),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Data Orang Tua / Wali',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Color(0xFF4CAF50),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Email Orang Tua
+                    TextFormField(
+                      controller: emailOrangtuaController,
+                      decoration: const InputDecoration(
+                        labelText: 'Email Orang Tua / Wali',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.email_outlined),
+                        helperText: 'Email untuk notifikasi presensi',
+                      ),
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Telepon Orang Tua
+                    TextFormField(
+                      controller: telpOrangtuaController,
+                      decoration: const InputDecoration(
+                        labelText: 'No. Telepon / WhatsApp',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.phone_outlined),
+                        helperText: 'Format: 08xxx atau 62xxx',
+                      ),
+                      keyboardType: TextInputType.phone,
+                    ),
                   ],
                 ),
               ),
@@ -1458,6 +1575,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       'nama': nameController.text.trim(),
                       'kelas': selectedClass,
                       'jenis_kelamin': selectedGender,
+                      'email_orangtua': emailOrangtuaController.text.trim(),
+                      'telp_orangtua': telpOrangtuaController.text.trim(),
                     });
                   },
                   style: ElevatedButton.styleFrom(
@@ -1580,6 +1699,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           'kelas_sw': data['kelas'],
           'jenis_kelamin': data['jenis_kelamin'],
           'nip': currentNip,
+          'email_orangtua': data['email_orangtua'] ?? '',
+          'telp_orangtua': data['telp_orangtua'] ?? '',
         });
 
         // Update attendance records with new NISN
@@ -1622,6 +1743,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           'kelas_sw': data['kelas'],
           'jenis_kelamin': data['jenis_kelamin'],
           'nip': currentNip,
+          'email_orangtua': data['email_orangtua'] ?? '',
+          'telp_orangtua': data['telp_orangtua'] ?? '',
         });
       }
 
@@ -1779,7 +1902,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       csvData.add(['Nama Siswa', widget.student.nama]);
       csvData.add([
         'NISN',
-        '="' + widget.student.nisn + '"'
+        '="${widget.student.nisn}"'
       ]); // Format to preserve leading zeros
       csvData.add(['Kelas', widget.student.kelas.toUpperCase()]);
       csvData.add(['Total Presensi', attendanceHistory.length.toString()]);

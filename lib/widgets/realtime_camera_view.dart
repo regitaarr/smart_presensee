@@ -459,9 +459,9 @@ class _RealtimeCameraViewState extends State<RealtimeCameraView>
                   color: Colors.black.withOpacity(0.6),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
+                  children: [
                     Icon(Icons.dark_mode, color: Colors.white, size: 14),
                     SizedBox(width: 6),
                     Text(

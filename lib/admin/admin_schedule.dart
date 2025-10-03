@@ -42,18 +42,18 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
   };
 
   final List<String> classOptions = [
-    '1a',
-    '1b',
-    '2a',
-    '2b',
-    '3a',
-    '3b',
-    '4a',
-    '4b',
-    '5a',
-    '5b',
-    '6a',
-    '6b'
+    '1A',
+    '1B',
+    '2A',
+    '2B',
+    '3A',
+    '3B',
+    '4A',
+    '4B',
+    '5A',
+    '5B',
+    '6A',
+    '6B'
   ];
 
   @override
@@ -356,7 +356,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
 
   Future<void> _showAddEditScheduleDialog({ScheduleModel? schedule}) async {
     String selectedHari = schedule?.hari ?? 'senin';
-    String selectedKelas = schedule?.kelas ?? '1a';
+    String selectedKelas = schedule?.kelas ?? '1A';
     TimeOfDay selectedJamMulai =
         schedule?.jamMulai ?? const TimeOfDay(hour: 8, minute: 0);
     TimeOfDay selectedJamSelesai =
@@ -1142,7 +1142,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                                         icon: const Icon(Icons.delete,
                                             color: Colors.red),
                                         onPressed: () =>
-                                            _deleteSchedule(schedule),
+                                            _confirmDeleteSchedule(schedule),
                                       ),
                                     ],
                                   ),
@@ -1363,6 +1363,56 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
 
   void _addNewSchedule() {
     _showAddEditScheduleDialog();
+  }
+
+  void _confirmDeleteSchedule(ScheduleModel schedule) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Konfirmasi Hapus'),
+          content: Text(
+            'Apakah Anda yakin ingin menghapus jadwal ini?\n\n'
+            'Mata Pelajaran: ${schedule.mataPelajaran}\n'
+            'Kelas: ${schedule.kelas}\n'
+            'Hari: ${dayLabels[schedule.hari.toLowerCase()] ?? schedule.hari}',
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                
+                // Call the delete action handler
+                await _handleScheduleAction({
+                  'action': 'delete',
+                  'schedule': schedule,
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Hapus',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 

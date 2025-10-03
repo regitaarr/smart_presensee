@@ -9,6 +9,8 @@ import 'package:smart_presensee/model/face_features.dart';
 import 'package:smart_presensee/model/user_model.dart';
 import 'package:smart_presensee/screens/authenticated_user_screen.dart';
 import 'package:smart_presensee/services/extract_features.dart';
+import 'package:smart_presensee/services/email_service.dart';
+import 'package:smart_presensee/services/attendance_time_helper.dart';
 import 'package:smart_presensee/widgets/realtime_camera_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_face_api/face_api.dart' as regula;
@@ -214,6 +216,17 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       final String nisn = user.nisn!.trim();
       log('Starting attendance save process for NISN: $nisn');
 
+      // 🕐 Cek waktu presensi terlebih dahulu
+      Map<String, dynamic> timeCheck = await AttendanceTimeHelper.checkAttendanceTime();
+      if (timeCheck['allowed'] == false) {
+        log('Attendance not allowed at this time: ${timeCheck['message']}');
+        _showFailureDialog(
+          title: "Waktu Presensi Tidak Valid",
+          description: timeCheck['message'] ?? 'Presensi hanya dapat dilakukan pada waktu yang ditentukan.',
+        );
+        return false;
+      }
+
       // Check if student has already attended today
       bool hasAttendedToday = await _checkTodayAttendance(nisn);
       if (hasAttendedToday) {
@@ -251,6 +264,10 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         log('Verified: Attendance record exists in Firestore');
         showToast(
             'Presensi berhasil dicatat pada ${_formatTime(DateTime.now())}!');
+        
+        // Kirim notifikasi email ke orang tua
+        _sendEmailNotification(nisn, user.name ?? 'Siswa', 'hadir');
+        
         return true;
       } else {
         log('Error: Failed to verify saved attendance record');
@@ -286,6 +303,61 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       'Desember'
     ];
     return '${dateTime.day} ${months[dateTime.month - 1]} ${dateTime.year}';
+  }
+
+  // Fungsi untuk mengirim notifikasi email ke orang tua
+  Future<void> _sendEmailNotification(
+      String nisn, String studentName, String status) async {
+    try {
+      log('📧 Memulai proses pengiriman email untuk NISN: $nisn');
+
+      // Ambil data siswa dari Firestore untuk mendapatkan email orang tua
+      DocumentSnapshot studentDoc = await FirebaseFirestore.instance
+          .collection('siswa')
+          .doc(nisn)
+          .get();
+
+      if (!studentDoc.exists) {
+        log('⚠️ Data siswa tidak ditemukan untuk NISN: $nisn');
+        return;
+      }
+
+      Map<String, dynamic> studentData =
+          studentDoc.data() as Map<String, dynamic>;
+
+      // Periksa apakah email orang tua tersedia
+      String? parentEmail = studentData['email_orangtua'];
+      if (parentEmail == null || parentEmail.isEmpty) {
+        log('⚠️ Email orang tua tidak tersedia untuk siswa: $studentName');
+        return;
+      }
+
+      // Ambil data tambahan
+      String namaLengkap = studentData['nama_siswa'] ?? studentName;
+      String? kelas = studentData['kelas_sw'];
+
+      log('📧 Mengirim email ke: $parentEmail untuk siswa: $namaLengkap');
+
+      // Kirim email menggunakan EmailService
+      bool emailSent = await EmailService.sendAttendanceNotification(
+        studentName: namaLengkap,
+        nisn: nisn,
+        parentEmail: parentEmail,
+        attendanceStatus: status,
+        attendanceTime: DateTime.now(),
+        className: kelas,
+      );
+
+      if (emailSent) {
+        log('✅ Email berhasil dikirim ke: $parentEmail');
+      } else {
+        log('❌ Gagal mengirim email ke: $parentEmail');
+      }
+    } catch (e) {
+      log('❌ Error saat mengirim email: $e');
+      // Tidak menampilkan error ke user karena presensi sudah berhasil
+      // Email hanya notifikasi tambahan
+    }
   }
 
   @override
@@ -1100,9 +1172,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
+                    const Text(
                       'Wajah terdeteksi',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF2E7D32),

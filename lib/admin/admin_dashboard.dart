@@ -8,6 +8,9 @@ import 'package:smart_presensee/admin/admin_face_list.dart';
 import 'package:smart_presensee/admin/admin_user_list.dart';
 import 'package:smart_presensee/admin/admin_profile_screen.dart';
 import 'package:smart_presensee/admin/admin_report_screen.dart';
+import 'package:smart_presensee/model/attendance_settings.dart';
+import 'package:smart_presensee/services/attendance_time_helper.dart';
+import 'package:smart_presensee/services/auto_alpha_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'dart:developer';
 
@@ -37,14 +40,267 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int todayAbsent = 0;
   bool isLoadingStats = true;
 
+  // Attendance settings variables
+  AttendanceSettings? _attendanceSettings;
+  bool _isLoadingSettings = true;
+
+  // Auto-alpha variables
+  int _absentStudentsCount = 0;
+  bool _isGeneratingAlpha = false;
+
   @override
   void initState() {
     super.initState();
     _loadStatistics();
+    _loadAttendanceSettings();
+    _loadAbsentStudentsCount();
   }
   
   void _navigateToFaceRecognition() {
     Navigator.pushNamed(context, '/face-recognition');
+  }
+
+  Future<void> _loadAttendanceSettings() async {
+    try {
+      setState(() => _isLoadingSettings = true);
+      AttendanceSettings settings = await AttendanceTimeHelper.getSettings();
+      setState(() {
+        _attendanceSettings = settings;
+        _isLoadingSettings = false;
+      });
+    } catch (e) {
+      log('Error loading attendance settings: $e');
+      setState(() => _isLoadingSettings = false);
+    }
+  }
+
+  Future<void> _toggleAttendanceRestriction(bool value) async {
+    try {
+      AttendanceSettings newSettings = AttendanceSettings(
+        id: 'default_settings',
+        jamMulai: _attendanceSettings?.jamMulai ?? '06:30',
+        jamSelesai: _attendanceSettings?.jamSelesai ?? '13:55',
+        aktif: value,
+      );
+
+      bool success = await AttendanceTimeHelper.updateSettings(newSettings);
+
+      if (success) {
+        setState(() {
+          _attendanceSettings = newSettings;
+        });
+        
+        Fluttertoast.showToast(
+          msg: value 
+              ? '✅ Pembatasan waktu presensi DIAKTIFKAN' 
+              : '⛔ Pembatasan waktu presensi DINONAKTIFKAN',
+          backgroundColor: value ? Colors.green : Colors.orange,
+          textColor: Colors.white,
+          fontSize: 14,
+        );
+      } else {
+        Fluttertoast.showToast(
+          msg: '❌ Gagal mengubah pengaturan',
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      log('Error toggling attendance restriction: $e');
+      Fluttertoast.showToast(
+        msg: '❌ Error: ${e.toString()}',
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
+  }
+
+  Future<void> _loadAbsentStudentsCount() async {
+    try {
+      int count = await AutoAlphaService.getAbsentStudentsCount();
+      setState(() {
+        _absentStudentsCount = count;
+      });
+      log('Absent students count: $count');
+    } catch (e) {
+      log('Error loading absent students count: $e');
+    }
+  }
+
+  Future<void> _generateAutoAlpha() async {
+    // Show confirmation dialog first
+    bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Konfirmasi Generate Alpha'),
+          content: Text(
+            'Generate status ALPHA untuk $_absentStudentsCount siswa yang belum presensi hari ini?\n\n'
+            'Status alpha akan tercatat di data presensi dan laporan.',
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Generate Alpha',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isGeneratingAlpha = true);
+
+    try {
+      Map<String, dynamic> result = await AutoAlphaService.generateAutoAlpha();
+
+      setState(() => _isGeneratingAlpha = false);
+
+      if (result['success'] == true) {
+        Fluttertoast.showToast(
+          msg: result['message'] ?? 'Alpha berhasil di-generate',
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+          toastLength: Toast.LENGTH_LONG,
+        );
+
+        // Reload statistics and absent count
+        _loadStatistics();
+        _loadAbsentStudentsCount();
+
+        // Show detailed result if there are alpha students
+        if (result['alphaCount'] > 0) {
+          _showAlphaResultDialog(result);
+        }
+      } else {
+        Fluttertoast.showToast(
+          msg: result['message'] ?? 'Gagal generate alpha',
+          backgroundColor: Colors.orange,
+          textColor: Colors.white,
+          toastLength: Toast.LENGTH_LONG,
+        );
+      }
+    } catch (e) {
+      setState(() => _isGeneratingAlpha = false);
+      
+      log('Error generating auto alpha: $e');
+      Fluttertoast.showToast(
+        msg: '❌ Error: ${e.toString()}',
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
+  }
+
+  void _showAlphaResultDialog(Map<String, dynamic> result) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        List<String> alphaStudents = result['alphaStudents'] ?? [];
+        int alphaCount = result['alphaCount'] ?? 0;
+        int emailSentCount = result['emailSentCount'] ?? 0;
+
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Colors.orange),
+              const SizedBox(width: 10),
+              Text('$alphaCount Siswa Alpha'),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Siswa berikut telah tercatat ALPHA:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 5),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.email, color: Colors.blue, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Email notifikasi terkirim ke $emailSentCount dari $alphaCount orang tua',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: alphaStudents.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Text('${index + 1}. '),
+                            Expanded(child: Text(alphaStudents[index])),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4CAF50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'OK',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _loadStatistics() async {
@@ -376,11 +632,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildDashboard() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 250),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Welcome Message
           Container(
             padding: const EdgeInsets.all(20),
@@ -436,6 +693,216 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ],
             ),
           ),
+          const SizedBox(height: 30),
+
+          // Attendance Time Settings Card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: _isLoadingSettings 
+                    ? [Colors.grey[300]!, Colors.grey[400]!]
+                    : (_attendanceSettings?.aktif ?? true)
+                        ? [const Color(0xFF4CAF50), const Color(0xFF66BB6A)]
+                        : [Colors.orange[400]!, Colors.orange[600]!],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: (_attendanceSettings?.aktif ?? true)
+                      ? Colors.green.withOpacity(0.3)
+                      : Colors.orange.withOpacity(0.3),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: _isLoadingSettings
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Row(
+                    children: [
+                      // Icon
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.access_time,
+                          size: 40,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      
+                      // Info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Pembatasan Waktu Presensi',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _attendanceSettings?.aktif ?? true
+                                  ? '⏰ ${_attendanceSettings?.jamMulai ?? "06:30"} - ${_attendanceSettings?.jamSelesai ?? "13:55"} WIB'
+                                  : 'Siswa dapat presensi kapan saja',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _attendanceSettings?.aktif ?? true
+                                  ? 'Status: AKTIF ✅'
+                                  : 'Status: NON-AKTIF ⛔',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      // Toggle Switch
+                      Transform.scale(
+                        scale: 1.3,
+                        child: Switch(
+                          value: _attendanceSettings?.aktif ?? true,
+                          onChanged: _toggleAttendanceRestriction,
+                          activeColor: Colors.white,
+                          activeTrackColor: Colors.green[200],
+                          inactiveThumbColor: Colors.white,
+                          inactiveTrackColor: Colors.grey[400],
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Auto-Generate Alpha Card
+          if (_absentStudentsCount > 0)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF9800), Color(0xFFFF6F00)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.orange.withOpacity(0.3),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Icon
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.warning_amber_rounded,
+                      size: 40,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  
+                  // Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Siswa Belum Presensi',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          '$_absentStudentsCount siswa belum presensi hari ini',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          'Klik tombol untuk generate status ALPHA',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Generate Button
+                  ElevatedButton.icon(
+                    onPressed: _isGeneratingAlpha ? null : _generateAutoAlpha,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFFFF6F00),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    icon: _isGeneratingAlpha
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFFFF6F00),
+                              ),
+                            ),
+                          )
+                        : const Icon(Icons.done_all, size: 20),
+                    label: Text(
+                      _isGeneratingAlpha ? 'Processing...' : 'Generate Alpha',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           const SizedBox(height: 30),
 
           // Statistics Cards
@@ -509,14 +976,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           const SizedBox(height: 20),
 
-          GridView.count(
-            crossAxisCount: 4,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 15,
-            mainAxisSpacing: 15,
-            childAspectRatio: 1.1,
-            children: [
+          Center(
+            child: SizedBox(
+              width: 600,
+              child: GridView.count(
+                crossAxisCount: 4,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: 15,
+                mainAxisSpacing: 15,
+                childAspectRatio: 0.95,
+                children: [
               _buildActionCard(
                 'Data Siswa',
                 'Lihat data siswa',
@@ -566,9 +1036,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Colors.pink,
                 () => _navigateToFaceRecognition(),
               ),
-            ],
+                ],
+              ),
+            ),
           ),
+          
+          // Extra space at bottom to avoid overlay
+          const SizedBox(height: 150),
         ],
+      ),
       ),
     );
   }

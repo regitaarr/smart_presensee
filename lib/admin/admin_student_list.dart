@@ -32,18 +32,18 @@ class _AdminStudentListState extends State<AdminStudentList> {
   ];
 
   final List<String> classOptions = [
-    '1a',
-    '1b',
-    '2a',
-    '2b',
-    '3a',
-    '3b',
-    '4a',
-    '4b',
-    '5a',
-    '5b',
-    '6a',
-    '6b'
+    '1A',
+    '1B',
+    '2A',
+    '2B',
+    '3A',
+    '3B',
+    '4A',
+    '4B',
+    '5A',
+    '5B',
+    '6A',
+    '6B'
   ];
 
   @override

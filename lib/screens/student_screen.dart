@@ -20,6 +20,8 @@ class _StudentScreenState extends State<StudentScreen>
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nisnController = TextEditingController();
   final TextEditingController _namaController = TextEditingController();
+  final TextEditingController _emailOrangtuaController = TextEditingController();
+  final TextEditingController _telpOrangtuaController = TextEditingController();
 
   String? _selectedGender;
   String? _selectedClass;
@@ -41,18 +43,18 @@ class _StudentScreenState extends State<StudentScreen>
 
   // Class options with modern styling
   final List<Map<String, String>> _classOptions = [
-    {'label': '1A', 'value': '1a'},
-    {'label': '1B', 'value': '1b'},
-    {'label': '2A', 'value': '2a'},
-    {'label': '2B', 'value': '2b'},
-    {'label': '3A', 'value': '3a'},
-    {'label': '3B', 'value': '3b'},
-    {'label': '4A', 'value': '4a'},
-    {'label': '4B', 'value': '4b'},
-    {'label': '5A', 'value': '5a'},
-    {'label': '5B', 'value': '5b'},
-    {'label': '6A', 'value': '6a'},
-    {'label': '6B', 'value': '6b'},
+    {'label': '1A', 'value': '1A'},
+    {'label': '1B', 'value': '1B'},
+    {'label': '2A', 'value': '2A'},
+    {'label': '2B', 'value': '2B'},
+    {'label': '3A', 'value': '3A'},
+    {'label': '3B', 'value': '3B'},
+    {'label': '4A', 'value': '4A'},
+    {'label': '4B', 'value': '4B'},
+    {'label': '5A', 'value': '5A'},
+    {'label': '5B', 'value': '5B'},
+    {'label': '6A', 'value': '6A'},
+    {'label': '6B', 'value': '6B'},
   ];
 
   @override
@@ -304,6 +306,101 @@ class _StudentScreenState extends State<StudentScreen>
                                   }
                                   return null;
                                 },
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Divider untuk Data Orang Tua
+                              const Divider(height: 40),
+                              const Row(
+                                children: [
+                                  Icon(
+                                    Icons.family_restroom,
+                                    color: Color(0xFF81C784),
+                                    size: 24,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Data Orang Tua / Wali',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF2E7D32),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+
+                              _buildModernTextField(
+                                controller: _emailOrangtuaController,
+                                label: 'Email Orang Tua / Wali',
+                                hint: 'contoh: orangtua@email.com',
+                                icon: Icons.email_outlined,
+                                keyboardType: TextInputType.emailAddress,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Email orang tua tidak boleh kosong';
+                                  }
+                                  // Validasi format email
+                                  final emailRegex = RegExp(
+                                    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                                  );
+                                  if (!emailRegex.hasMatch(value.trim())) {
+                                    return 'Format email tidak valid';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 24),
+
+                              _buildModernTextField(
+                                controller: _telpOrangtuaController,
+                                label: 'Nomor Telepon / WhatsApp',
+                                hint: 'contoh: 081234567890',
+                                icon: Icons.phone_outlined,
+                                keyboardType: TextInputType.phone,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Nomor telepon tidak boleh kosong';
+                                  }
+                                  // Validasi format telepon Indonesia
+                                  final phoneRegex = RegExp(r'^(08|62)\d{8,11}$');
+                                  if (!phoneRegex.hasMatch(value.trim())) {
+                                    return 'Format nomor telepon tidak valid (gunakan 08xxx atau 62xxx)';
+                                  }
+                                  return null;
+                                },
+                              ),
+
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF9E6),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                      color: const Color(0xFFFFE082)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.info_outline,
+                                      color: Color(0xFFFF8F00),
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Email dan nomor telepon akan digunakan untuk notifikasi kehadiran siswa.',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.orange[900],
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                               const SizedBox(height: 36),
 
@@ -661,6 +758,8 @@ class _StudentScreenState extends State<StudentScreen>
     try {
       final String nisn = _nisnController.text.trim();
       final String nama = _namaController.text.trim();
+      final String emailOrangtua = _emailOrangtuaController.text.trim();
+      final String telpOrangtua = _telpOrangtuaController.text.trim();
 
       // Validate NISN length
       if (nisn.length != 10) {
@@ -683,13 +782,15 @@ class _StudentScreenState extends State<StudentScreen>
         return;
       }
 
-      // Save student data with wali kelas NIP
+      // Save student data with wali kelas NIP and parent contact info
       await FirebaseFirestore.instance.collection('siswa').doc(nisn).set({
         'nisn': nisn,
         'nama_siswa': nama,
         'jenis_kelamin': _selectedGender,
         'kelas_sw': _selectedClass,
         'nip': _walikelasNip, // Add the wali kelas NIP
+        'email_orangtua': emailOrangtua, // Add parent email
+        'telp_orangtua': telpOrangtua, // Add parent phone
       });
 
       _showSuccessToast('Data siswa berhasil disimpan!');
@@ -710,6 +811,8 @@ class _StudentScreenState extends State<StudentScreen>
   void _clearForm() {
     _nisnController.clear();
     _namaController.clear();
+    _emailOrangtuaController.clear();
+    _telpOrangtuaController.clear();
     setState(() {
       _selectedGender = null;
       _selectedClass = null;
