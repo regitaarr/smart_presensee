@@ -4,6 +4,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:smart_presensee/screens/splash_screen.dart';
+import 'package:smart_presensee/services/alpha_scheduler_service.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -11,6 +12,10 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  // Start scheduler untuk auto-alpha
+  AlphaSchedulerService.startScheduler();
+  
   runApp(const MyApp());
 }
 

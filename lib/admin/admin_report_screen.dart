@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'dart:developer';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' as excel;
 import 'package:universal_html/html.dart' as html; // For web download
 import 'dart:io'; // For mobile/desktop download
 import 'package:path_provider/path_provider.dart'; // For mobile/desktop path
@@ -204,8 +204,8 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
 
       // Generate Excel for each class
       for (var kelas in classGroups.keys) {
-        var excel = Excel.createExcel();
-        var sheet = excel.sheets.values.first;
+        var excelFile = excel.Excel.createExcel();
+        var sheet = excelFile.sheets.values.first;
 
         // Add field headers
         sheet.appendRow(
@@ -263,7 +263,7 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
 
         if (kIsWeb) {
           // Web platform
-          final bytes = excel.encode();
+          final bytes = excelFile.encode();
           final blob = html.Blob([bytes]);
           final url = html.Url.createObjectUrlFromBlob(blob);
           html.AnchorElement(href: url)
@@ -274,7 +274,7 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
           // Mobile platform
           final directory = await getTemporaryDirectory();
           final file = File('${directory.path}/$filename');
-          await file.writeAsBytes(excel.encode()!);
+          await file.writeAsBytes(excelFile.encode()!);
           await Share.shareXFiles(
             [XFile(file.path)],
             text:
@@ -470,8 +470,8 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
           .sort((a, b) => (a['nisn'] as String).compareTo(b['nisn'] as String));
 
       // Generate Excel
-      var excel = Excel.createExcel();
-      var sheet = excel.sheets.values.first;
+      var excelFile = excel.Excel.createExcel();
+      var sheet = excelFile.sheets.values.first;
 
       // Add field headers
       sheet.appendRow(['NISN', 'Nama', 'Tanggal', 'Waktu', 'Status', 'Metode']);
@@ -524,7 +524,7 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
 
       if (kIsWeb) {
         // Web platform
-        final bytes = excel.encode();
+        final bytes = excelFile.encode();
         final blob = html.Blob([bytes]);
         final url = html.Url.createObjectUrlFromBlob(blob);
         html.AnchorElement(href: url)
@@ -535,7 +535,7 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
         // Mobile platform
         final directory = await getTemporaryDirectory();
         final file = File('${directory.path}/$filename');
-        await file.writeAsBytes(excel.encode()!);
+        await file.writeAsBytes(excelFile.encode()!);
         await Share.shareXFiles(
           [XFile(file.path)],
           text:
@@ -621,154 +621,391 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
         centerTitle: true,
+        elevation: 0,
       ),
-      body: Center(
-        child: Container(
-          padding: const EdgeInsets.all(28.0),
-          margin: const EdgeInsets.all(24.0),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16.0),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.2),
-                spreadRadius: 5,
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              const Color(0xFF4CAF50).withOpacity(0.05),
+              Colors.white,
             ],
           ),
+        ),
+        child: Center(
           child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4CAF50).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(50),
-                  ),
-                  child: const Icon(Icons.assignment_outlined,
-                      size: 60, color: Color(0xFF4CAF50)),
-                ),
-                const SizedBox(height: 28),
-                const Text(
-                  'Unduh Laporan Kehadiran',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Pilih tanggal laporan yang diinginkan dan tekan tombol unduh.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                ElevatedButton.icon(
-                  onPressed: () => _selectDate(context),
-                  icon: const Icon(Icons.calendar_today, color: Colors.white),
-                  label: Text(
-                    'Tanggal: ${DateFormat('dd MMMM yyyy').format(_selectedDate)}',
-                    style: const TextStyle(fontSize: 18, color: Colors.white),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4CAF50),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: 5,
-                    shadowColor: const Color(0xFF4CAF50).withOpacity(0.3),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: isLoading ? null : _generateAndDownloadCsv,
-                      icon: isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Icon(Icons.download, color: Colors.white),
-                      label: Text(
-                        isLoading ? 'Memuat Data...' : 'Unduh Semua',
-                        style:
-                            const TextStyle(fontSize: 18, color: Colors.white),
+            padding: const EdgeInsets.all(24),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Header Card dengan Icon
+                  Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF4CAF50),
+                          const Color(0xFF66BB6A),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4CAF50),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4CAF50).withOpacity(0.3),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
                         ),
-                        elevation: 5,
-                        shadowColor: const Color(0xFF4CAF50).withOpacity(0.3),
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 16),
-                    ElevatedButton.icon(
-                      onPressed: isLoading ? null : _downloadClassReport,
-                      icon: isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Icon(Icons.class_, color: Colors.white),
-                      label: Text(
-                        isLoading ? 'Memuat Data...' : 'Unduh Per Kelas',
-                        style:
-                            const TextStyle(fontSize: 18, color: Colors.white),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4CAF50),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.assessment_rounded,
+                            size: 64,
+                            color: Colors.white,
+                          ),
                         ),
-                        elevation: 5,
-                        shadowColor: const Color(0xFF4CAF50).withOpacity(0.3),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Unduh Laporan Kehadiran',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Pilih tanggal dan format laporan yang diinginkan',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  
+                  // Date Selection Card
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFF4CAF50).withOpacity(0.2),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 15,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2196F3).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.date_range,
+                                color: Color(0xFF2196F3),
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            const Text(
+                              'Pilih Tanggal Laporan',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2C3E50),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        InkWell(
+                          onTap: () => _selectDate(context),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 20,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  const Color(0xFF2196F3),
+                                  const Color(0xFF42A5F5),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF2196F3).withOpacity(0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.calendar_today,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  DateFormat('dd MMMM yyyy')
+                                      .format(_selectedDate),
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  // Download Options
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFF4CAF50).withOpacity(0.2),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 15,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4CAF50).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.file_download,
+                                color: Color(0xFF4CAF50),
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            const Text(
+                              'Pilih Format Download',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2C3E50),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Download All Button
+                        _buildDownloadButton(
+                          onPressed: isLoading ? null : _generateAndDownloadCsv,
+                          icon: Icons.download_rounded,
+                          label: 'Unduh Semua Data',
+                          subtitle: 'Download laporan lengkap semua kelas',
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                          ),
+                          isLoading: isLoading,
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Download Per Class Button
+                        _buildDownloadButton(
+                          onPressed: isLoading ? null : _downloadClassReport,
+                          icon: Icons.class_rounded,
+                          label: 'Unduh Per Kelas',
+                          subtitle: 'Download laporan berdasarkan kelas',
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFF9800), Color(0xFFFFB74D)],
+                          ),
+                          isLoading: isLoading,
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Error Message
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.red.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            color: Colors.red,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              errorMessage!,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
-                ),
-                if (errorMessage != null) ...[
-                  const SizedBox(height: 20),
-                  Text(
-                    errorMessage!,
-                    style: const TextStyle(
-                      color: Colors.red,
-                      fontSize: 14,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
                 ],
-              ],
+              ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDownloadButton({
+    required VoidCallback? onPressed,
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required Gradient gradient,
+    required bool isLoading,
+  }) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: onPressed == null
+              ? LinearGradient(colors: [Colors.grey.shade300, Colors.grey.shade400])
+              : gradient,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: onPressed == null
+              ? []
+              : [
+                  BoxShadow(
+                    color: gradient.colors.first.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : Icon(
+                      icon,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isLoading ? 'Memuat Data...' : label,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              color: Colors.white.withOpacity(0.8),
+              size: 20,
+            ),
+          ],
         ),
       ),
     );

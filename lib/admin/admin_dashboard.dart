@@ -11,6 +11,7 @@ import 'package:smart_presensee/admin/admin_report_screen.dart';
 import 'package:smart_presensee/model/attendance_settings.dart';
 import 'package:smart_presensee/services/attendance_time_helper.dart';
 import 'package:smart_presensee/services/auto_alpha_service.dart';
+import 'package:smart_presensee/services/alpha_scheduler_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'dart:developer';
 
@@ -54,10 +55,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _loadStatistics();
     _loadAttendanceSettings();
     _loadAbsentStudentsCount();
-  }
-  
-  void _navigateToFaceRecognition() {
-    Navigator.pushNamed(context, '/face-recognition');
   }
 
   Future<void> _loadAttendanceSettings() async {
@@ -595,12 +592,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _loadStatistics,
-        backgroundColor: const Color(0xFF4CAF50),
-        tooltip: 'Refresh Data',
-        child: const Icon(Icons.refresh, color: Colors.white),
-      ),
     );
   }
 
@@ -798,110 +789,213 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
           const SizedBox(height: 20),
 
-          // Auto-Generate Alpha Card
-          if (_absentStudentsCount > 0)
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFF9800), Color(0xFFFF6F00)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.orange.withOpacity(0.3),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
+          // Auto-Alpha Scheduler & Status Card (Gabungan)
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: _absentStudentsCount > 0
+                    ? [const Color(0xFFFF9800), const Color(0xFFFF6F00)]
+                    : [const Color(0xFF2196F3), const Color(0xFF1976D2)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              child: Row(
-                children: [
-                  // Icon
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: (_absentStudentsCount > 0 ? Colors.orange : Colors.blue)
+                      .withOpacity(0.3),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Row
+                Row(
+                  children: [
+                    // Icon
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _absentStudentsCount > 0
+                            ? Icons.warning_amber_rounded
+                            : Icons.schedule,
+                        size: 40,
+                        color: Colors.white,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.warning_amber_rounded,
-                      size: 40,
-                      color: Colors.white,
+                    const SizedBox(width: 20),
+                    
+                    // Title & Info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Auto-Alpha Scheduler',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          FutureBuilder<Map<String, dynamic>>(
+                            future: Future.value(AlphaSchedulerService.getStatus()),
+                            builder: (context, snapshot) {
+                              if (snapshot.hasData) {
+                                bool isRunning = snapshot.data!['isRunning'] ?? false;
+                                bool executedToday = snapshot.data!['executedToday'] ?? false;
+                                
+                                return Text(
+                                  isRunning 
+                                      ? '✅ Scheduler Aktif | ${executedToday ? "Sudah dijalankan hari ini" : "Menunggu eksekusi"}'
+                                      : '❌ Scheduler Tidak Aktif',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                );
+                              }
+                              return const Text(
+                                'Memuat status...',
+                                style: TextStyle(fontSize: 13, color: Colors.white),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 20),
-                  
-                  // Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ],
+                ),
+                
+                const SizedBox(height: 20),
+                
+                // Divider
+                Container(
+                  height: 1,
+                  color: Colors.white.withOpacity(0.3),
+                ),
+                
+                const SizedBox(height: 20),
+                
+                // Statistics & Action Row
+                Row(
+                  children: [
+                    // Statistics Column
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Jumlah siswa belum presensi
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.people_outline,
+                                color: Colors.white.withOpacity(0.9),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Siswa Belum Presensi:',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '$_absentStudentsCount siswa',
+                            style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            _absentStudentsCount > 0
+                                ? 'Klik tombol untuk generate status ALPHA'
+                                : '✓ Semua siswa sudah presensi hari ini',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.85),
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(width: 20),
+                    
+                    // Action Button
+                    Column(
                       children: [
-                        const Text(
-                          'Siswa Belum Presensi',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        ElevatedButton.icon(
+                          onPressed: _isGeneratingAlpha ? null : _generateAutoAlpha,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: _absentStudentsCount > 0
+                                ? const Color(0xFFFF6F00)
+                                : const Color(0xFF1976D2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 16,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 3,
+                          ),
+                          icon: _isGeneratingAlpha
+                              ? SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      _absentStudentsCount > 0
+                                          ? const Color(0xFFFF6F00)
+                                          : const Color(0xFF1976D2),
+                                    ),
+                                  ),
+                                )
+                              : const Icon(Icons.done_all, size: 22),
+                          label: Text(
+                            _isGeneratingAlpha ? 'Processing...' : 'Generate Alpha',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 8),
                         Text(
-                          '$_absentStudentsCount siswa belum presensi hari ini',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          'Klik tombol untuk generate status ALPHA',
+                          'Otomatis jam ${_attendanceSettings?.jamSelesai ?? "13:55"} + 1 menit',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 11,
+                            color: Colors.white.withOpacity(0.8),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  
-                  // Generate Button
-                  ElevatedButton.icon(
-                    onPressed: _isGeneratingAlpha ? null : _generateAutoAlpha,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFFFF6F00),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    icon: _isGeneratingAlpha
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Color(0xFFFF6F00),
-                              ),
-                            ),
-                          )
-                        : const Icon(Icons.done_all, size: 20),
-                    label: Text(
-                      _isGeneratingAlpha ? 'Processing...' : 'Generate Alpha',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ),
+          ),
 
           const SizedBox(height: 30),
 
@@ -925,14 +1019,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
           else
             Center(
               child: SizedBox(
-                width: 600,
+                width: 1000,
                 child: GridView.count(
                   crossAxisCount: 4,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 15,
-                  mainAxisSpacing: 15,
-                  childAspectRatio: 1.2,
+                  crossAxisSpacing: 20,
+                  mainAxisSpacing: 20,
+                  childAspectRatio: 1.3,
                   children: [
                     _buildStatCard(
                       'Total Siswa',
@@ -978,14 +1072,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
           Center(
             child: SizedBox(
-              width: 600,
+              width: 1000,
               child: GridView.count(
                 crossAxisCount: 4,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 15,
-                mainAxisSpacing: 15,
-                childAspectRatio: 0.95,
+                crossAxisSpacing: 20,
+                mainAxisSpacing: 20,
+                childAspectRatio: 1.0,
                 children: [
               _buildActionCard(
                 'Data Siswa',
@@ -1029,13 +1123,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Colors.teal,
                 () => setState(() => _selectedIndex = 6),
               ),
-              _buildActionCard(
-                'Face Recognition',
-                'Presensi dengan pengenalan wajah',
-                Icons.face_retouching_natural,
-                Colors.pink,
-                () => _navigateToFaceRecognition(),
-              ),
                 ],
               ),
             ),
@@ -1052,15 +1139,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _buildStatCard(
       String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: color.withOpacity(0.15),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -1069,24 +1156,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
         children: [
           Icon(
             icon,
-            size: 28,
+            size: 38,
             color: color,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
             value,
             style: TextStyle(
-              fontSize: 22,
+              fontSize: 32,
               fontWeight: FontWeight.bold,
               color: color,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
             title,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 14,
               color: Colors.grey[700],
+              fontWeight: FontWeight.w500,
             ),
             textAlign: TextAlign.center,
           ),
@@ -1104,17 +1192,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
   ) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
+              color: color.withOpacity(0.15),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -1123,24 +1211,24 @@ class _AdminDashboardState extends State<AdminDashboard> {
           children: [
             Icon(
               icon,
-              size: 28,
+              size: 38,
               color: color,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
               title,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 6),
             Text(
               subtitle,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 color: Colors.grey[600],
               ),
               textAlign: TextAlign.center,

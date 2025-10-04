@@ -194,13 +194,6 @@ class _AdminAttendanceListState extends State<AdminAttendanceList> {
         ),
         backgroundColor: const Color(0xFF4CAF50),
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadAttendanceData,
-            tooltip: 'Refresh Data',
-          ),
-        ],
       ),
       body: Column(
         children: [

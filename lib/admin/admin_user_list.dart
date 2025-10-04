@@ -423,95 +423,235 @@ class _AdminUserListState extends State<AdminUserList> {
                         itemCount: filteredUserList.length,
                         itemBuilder: (context, index) {
                           final user = filteredUserList[index];
+                          final isWalikelas = user['role'] == 'walikelas';
+                          
                           return Container(
-                            margin: const EdgeInsets.only(bottom: 16),
+                            margin: const EdgeInsets.only(bottom: 20),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: const Color(0xFF4CAF50).withOpacity(0.2),
+                                width: 1,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.grey.withOpacity(0.1),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
+                                  color: Colors.grey.withOpacity(0.08),
+                                  blurRadius: 15,
+                                  offset: const Offset(0, 5),
                                 ),
                               ],
                             ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.all(16),
-                              leading: CircleAvatar(
-                                radius: 28,
-                                backgroundColor:
-                                    const Color(0xFF4CAF50).withOpacity(0.15),
-                                child: const Icon(
-                                  Icons.person,
-                                  color: Color(0xFF4CAF50),
-                                  size: 32,
-                                ),
-                              ),
-                              title: Text(
-                                user['nama'] ?? '-',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: Color(0xFF2C3E50),
-                                ),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Row(
                                 children: [
-                                  const SizedBox(height: 4),
-                                  Text('ID: ${user['id_pengguna'] ?? '-'}',
-                                      style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 14)),
-                                  const SizedBox(height: 4),
-                                  Text('Email: ${user['email'] ?? '-'}',
-                                      style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 14)),
-                                  const SizedBox(height: 4),
-                                  Text('WhatsApp: ${user['whatsapp'] ?? '-'}',
-                                      style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 14)),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                      'Role: ${_formatRoleForDisplay(user['role'] ?? '-')}',
-                                      style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 14)),
-                                  // Tampilkan informasi kelas untuk wali kelas
-                                  if (user['role'] == 'walikelas') ...[
-                                    const SizedBox(height: 4),
-                                    Text('NIP: ${user['nip'] ?? '-'}',
-                                        style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 14)),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                        'Kelas yang Diampu: ${user['kelas_diampu'] ?? '-'}',
-                                        style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500)),
-                                  ],
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit,
-                                        color: Color(0xFF4CAF50)),
-                                    tooltip: 'Edit Pengguna',
-                                    onPressed: () => _showEditDialog(user),
+                                  // Avatar dengan badge role
+                                  Stack(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              const Color(0xFF4CAF50),
+                                              const Color(0xFF66BB6A),
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                          borderRadius: BorderRadius.circular(16),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFF4CAF50).withOpacity(0.3),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.person,
+                                          color: Colors.white,
+                                          size: 32,
+                                        ),
+                                      ),
+                                      Positioned(
+                                        bottom: 0,
+                                        right: 0,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: isWalikelas 
+                                                ? const Color(0xFF2196F3) 
+                                                : const Color(0xFFFF9800),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Colors.white,
+                                              width: 2,
+                                            ),
+                                          ),
+                                          child: Icon(
+                                            isWalikelas ? Icons.school : Icons.admin_panel_settings,
+                                            color: Colors.white,
+                                            size: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete,
-                                        color: Colors.red),
-                                    tooltip: 'Hapus Pengguna',
-                                    onPressed: () => _showDeleteDialog(
-                                        user['id'], user['nama'] ?? '-'),
+                                  const SizedBox(width: 20),
+                                  // Informasi Pengguna
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Nama dan Badge Role
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                user['nama'] ?? '-',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 18,
+                                                  color: Color(0xFF2C3E50),
+                                                  letterSpacing: 0.3,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: isWalikelas
+                                                      ? [const Color(0xFF2196F3), const Color(0xFF42A5F5)]
+                                                      : [const Color(0xFFFF9800), const Color(0xFFFFB74D)],
+                                                ),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                _formatRoleForDisplay(user['role'] ?? '-'),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  letterSpacing: 0.5,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        // NIP (ditampilkan setelah nama)
+                                        if (isWalikelas && user['nip'] != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(bottom: 8),
+                                            child: Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.all(6),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF2196F3).withOpacity(0.1),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.badge,
+                                                    size: 16,
+                                                    color: Color(0xFF2196F3),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Text(
+                                                    'NIP: ${user['nip']}',
+                                                    style: const TextStyle(
+                                                      color: Color(0xFF2196F3),
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        // ID Pengguna
+                                        _buildInfoRow(
+                                          Icons.fingerprint,
+                                          'ID',
+                                          user['id_pengguna'] ?? '-',
+                                          const Color(0xFF9C27B0),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        // Email
+                                        _buildInfoRow(
+                                          Icons.email_outlined,
+                                          'Email',
+                                          user['email'] ?? '-',
+                                          const Color(0xFF4CAF50),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        // WhatsApp
+                                        _buildInfoRow(
+                                          Icons.phone_android,
+                                          'WhatsApp',
+                                          user['whatsapp'] ?? '-',
+                                          const Color(0xFF00BCD4),
+                                        ),
+                                        // Kelas yang Diampu (untuk wali kelas)
+                                        if (isWalikelas) ...[
+                                          const SizedBox(height: 6),
+                                          _buildInfoRow(
+                                            Icons.class_,
+                                            'Kelas',
+                                            user['kelas_diampu'] ?? '-',
+                                            const Color(0xFFFF9800),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // Action Buttons
+                                  Column(
+                                    children: [
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF4CAF50).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: IconButton(
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            color: Color(0xFF4CAF50),
+                                            size: 22,
+                                          ),
+                                          tooltip: 'Edit Pengguna',
+                                          onPressed: () => _showEditDialog(user),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: IconButton(
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.red,
+                                            size: 22,
+                                          ),
+                                          tooltip: 'Hapus Pengguna',
+                                          onPressed: () => _showDeleteDialog(
+                                              user['id'], user['nama'] ?? '-'),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -534,5 +674,50 @@ class _AdminUserListState extends State<AdminUserList> {
       default:
         return role;
     }
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value, Color color) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: color,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: RichText(
+            overflow: TextOverflow.ellipsis,
+            text: TextSpan(
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[700],
+              ),
+              children: [
+                TextSpan(
+                  text: '$label: ',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                TextSpan(
+                  text: value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
