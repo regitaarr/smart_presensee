@@ -452,10 +452,10 @@ class _AdminUserListState extends State<AdminUserList> {
                                       Container(
                                         padding: const EdgeInsets.all(16),
                                         decoration: BoxDecoration(
-                                          gradient: LinearGradient(
+                                          gradient: const LinearGradient(
                                             colors: [
-                                              const Color(0xFF4CAF50),
-                                              const Color(0xFF66BB6A),
+                                              Color(0xFF4CAF50),
+                                              Color(0xFF66BB6A),
                                             ],
                                             begin: Alignment.topLeft,
                                             end: Alignment.bottomRight,

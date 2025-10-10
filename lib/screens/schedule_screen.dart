@@ -230,6 +230,13 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   }
 
   bool _isCurrentSchedule(ScheduleModel schedule) {
+    // Check if schedule is for today
+    String today = _getCurrentDay();
+    if (schedule.hari.toLowerCase() != today) {
+      return false; // Not today's schedule
+    }
+    
+    // Check if current time is within schedule time
     final now = TimeOfDay.now();
     final startMinutes = schedule.jamMulai.hour * 60 + schedule.jamMulai.minute;
     final endMinutes =
@@ -660,72 +667,176 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     bool isToday = day == _getCurrentDay();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
+      margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E9), // Hijau pastel untuk semua card
-        borderRadius: BorderRadius.circular(16),
-        border: isToday
-            ? Border.all(
-                color: const Color(0xFFFFC107),
-                width: 2) // Orange untuk hari ini
-            : Border.all(
-                color: const Color(0xFF81C784), width: 1), // Hijau untuk lain
+        gradient: isToday
+            ? const LinearGradient(
+                colors: [
+                  Color(0xFFFFF9C4),
+                  Color(0xFFFFECB3),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : const LinearGradient(
+                colors: [
+                  Colors.white,
+                  Color(0xFFF1F8E9),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isToday
+              ? const Color(0xFFFFC107).withOpacity(0.3)
+              : const Color(0xFF4CAF50).withOpacity(0.2),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isToday
+                ? const Color(0xFFFFC107).withOpacity(0.15)
+                : const Color(0xFF4CAF50).withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Day header
+            // Day header with gradient badge
             Row(
               children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isToday
-                        ? const Color(0xFFFFC107)
-                        : const Color(0xFF36C340),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.today, size: 18, color: Colors.white),
-                      const SizedBox(width: 6),
-                      Text(
-                        dayLabels[day]!,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isToday
+                            ? [const Color(0xFFFFC107), const Color(0xFFFFB300)]
+                            : [const Color(0xFF4CAF50), const Color(0xFF66BB6A)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(25),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isToday
+                              ? const Color(0xFFFFC107).withOpacity(0.3)
+                              : const Color(0xFF4CAF50).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isToday ? Icons.today_rounded : Icons.calendar_today_rounded,
+                          size: 18,
                           color: Colors.white,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            dayLabels[day]!,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const Spacer(),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isToday
-                        ? const Color(0xFFFFC107)
-                        : const Color(0xFF36C340),
-                    borderRadius: BorderRadius.circular(12),
+                if (isToday) ...[
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFFFC107).withOpacity(0.3),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.fiber_manual_record,
+                            size: 8,
+                            color: Color(0xFFFFC107),
+                          ),
+                          SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Hari Ini',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFFFC107),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: Text(
-                    '${schedules.length} jadwal',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                ],
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isToday
+                          ? const Color(0xFFFFC107).withOpacity(0.2)
+                          : const Color(0xFF4CAF50).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: isToday
+                            ? const Color(0xFFFFC107).withOpacity(0.3)
+                            : const Color(0xFF4CAF50).withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.schedule_rounded,
+                          size: 14,
+                          color: isToday ? const Color(0xFFFFC107) : const Color(0xFF4CAF50),
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '${schedules.length}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isToday ? const Color(0xFFFFC107) : const Color(0xFF4CAF50),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // Schedule items
             ...schedules
@@ -741,108 +852,199 @@ class _ScheduleScreenState extends State<ScheduleScreen>
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E9), // Hijau pastel untuk semua card
-        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          colors: isCurrent
+              ? [const Color(0xFF4CAF50), const Color(0xFF66BB6A)]
+              : [Colors.white, Colors.white],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isCurrent
-              ? Colors.white.withOpacity(0.2)
-              : const Color(0xFFFF8A65).withOpacity(0.2),
-          width: 1,
+              ? const Color(0xFF4CAF50).withOpacity(0.3)
+              : Colors.grey.withOpacity(0.15),
+          width: 1.5,
         ),
-      ),
-      child: Row(
-        children: [
-          // Time
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF36C340),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  _formatTimeOfDay(schedule.jamMulai),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                Container(
-                  width: 20,
-                  height: 1,
-                  color: Colors.white.withOpacity(0.5),
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                ),
-                Text(
-                  _formatTimeOfDay(schedule.jamSelesai),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-
-          // Subject info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  schedule.mataPelajaran,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87, // Hitam
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.class_,
-                      size: 18,
-                      color: Colors.black87,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Kelas ${schedule.kelas.toUpperCase()}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Duration
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF36C340),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              _calculateDuration(schedule.jamMulai, schedule.jamSelesai),
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
+        boxShadow: [
+          BoxShadow(
+            color: isCurrent
+                ? const Color(0xFF4CAF50).withOpacity(0.2)
+                : Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          children: [
+            // Time Badge with gradient
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isCurrent
+                      ? [Colors.white, Colors.white.withOpacity(0.9)]
+                      : [const Color(0xFF4CAF50), const Color(0xFF66BB6A)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: isCurrent
+                        ? Colors.white.withOpacity(0.3)
+                        : const Color(0xFF4CAF50).withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.access_time_rounded,
+                    size: 18,
+                    color: isCurrent ? const Color(0xFF4CAF50) : Colors.white,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _formatTimeOfDay(schedule.jamMulai),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: isCurrent ? const Color(0xFF4CAF50) : Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Container(
+                    width: 24,
+                    height: 2,
+                    decoration: BoxDecoration(
+                      color: (isCurrent ? const Color(0xFF4CAF50) : Colors.white)
+                          .withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                  ),
+                  Text(
+                    _formatTimeOfDay(schedule.jamSelesai),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: isCurrent ? const Color(0xFF4CAF50) : Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 18),
+
+            // Subject info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    schedule.mataPelajaran,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isCurrent ? Colors.white : const Color(0xFF2C3E50),
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isCurrent
+                          ? Colors.white.withOpacity(0.2)
+                          : const Color(0xFF4CAF50).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isCurrent
+                            ? Colors.white.withOpacity(0.3)
+                            : const Color(0xFF4CAF50).withOpacity(0.2),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.school_rounded,
+                          size: 14,
+                          color: isCurrent ? Colors.white : const Color(0xFF4CAF50),
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            'Kelas ${schedule.kelas.toUpperCase()}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isCurrent ? Colors.white : const Color(0xFF4CAF50),
+                              letterSpacing: 0.3,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Duration Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isCurrent
+                      ? [Colors.white, Colors.white.withOpacity(0.9)]
+                      : [const Color(0xFFFF9800), const Color(0xFFFFB74D)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: (isCurrent ? Colors.white : const Color(0xFFFF9800))
+                        .withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.timer_rounded,
+                    size: 16,
+                    color: isCurrent ? const Color(0xFF4CAF50) : Colors.white,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _calculateDuration(schedule.jamMulai, schedule.jamSelesai),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: isCurrent ? const Color(0xFF4CAF50) : Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -857,7 +1059,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     } else {
       int hours = duration ~/ 60;
       int minutes = duration % 60;
-      return minutes > 0 ? '${hours}h ${minutes}m' : '${hours}h';
+      return minutes > 0 ? '${hours}j ${minutes}m' : '${hours}j';
     }
   }
 }

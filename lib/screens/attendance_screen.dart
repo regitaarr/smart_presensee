@@ -6,11 +6,14 @@ import 'package:smart_presensee/screens/student_screen.dart';
 import 'package:smart_presensee/services/email_service.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:csv/csv.dart';
 import 'package:universal_html/html.dart' as html;
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:excel/excel.dart' as excel;
+import 'package:intl/intl.dart';
+import 'package:open_file/open_file.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final String userEmail;
@@ -101,7 +104,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         errorMessage = null;
       });
 
-      log('=== MULAI LOAD DATA SISWA ===');
+      log('=== MULAI LOAD DATA SISWA (OPTIMIZED) ===');
+      final stopwatch = Stopwatch()..start();
 
       // Load siswa from collection 'siswa'
       Query studentQuery = FirebaseFirestore.instance.collection('siswa');
@@ -111,9 +115,38 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         studentQuery = studentQuery.where('nip', isEqualTo: widget.userNip);
       }
 
-      QuerySnapshot studentSnapshot = await studentQuery.get();
+      // BATCH 1: Get all students - Execute in parallel with other queries
+      final studentsFuture = studentQuery.get();
+      
+      // BATCH 2: Get all face data for today in one query
+      final facesFuture = FirebaseFirestore.instance
+          .collection('wajah_siswa')
+          .get();
+      
+      // BATCH 3: Get all attendance for selected date in one query
+      DateTime startOfDay = DateTime(
+          selectedDate.year, selectedDate.month, selectedDate.day, 0, 0, 0);
+      DateTime endOfDay = DateTime(
+          selectedDate.year, selectedDate.month, selectedDate.day, 23, 59, 59);
+      
+      final attendanceFuture = FirebaseFirestore.instance
+          .collection('presensi')
+          .where('tanggal_waktu',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('tanggal_waktu', isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+          .get();
 
-      log('Jumlah siswa ditemukan: ${studentSnapshot.docs.length}');
+      // Execute all queries in parallel - MUCH FASTER!
+      final results = await Future.wait([studentsFuture, facesFuture, attendanceFuture]);
+      
+      final studentSnapshot = results[0] as QuerySnapshot;
+      final faceSnapshot = results[1] as QuerySnapshot;
+      final attendanceSnapshot = results[2] as QuerySnapshot;
+
+      log('⚡ Query time: ${stopwatch.elapsedMilliseconds}ms');
+      log('📊 Students: ${studentSnapshot.docs.length}');
+      log('📊 Faces: ${faceSnapshot.docs.length}');
+      log('📊 Attendance: ${attendanceSnapshot.docs.length}');
 
       if (studentSnapshot.docs.isEmpty) {
         setState(() {
@@ -123,26 +156,41 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         return;
       }
 
+      // Create lookup maps for fast access - O(1) instead of O(n)
+      final Map<String, String?> faceImageMap = {}; // Store base64 image
+      for (var doc in faceSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final nisn = data['nisn'];
+        final gambar = data['gambar']; // Base64 string
+        if (nisn != null) {
+          faceImageMap[nisn] = gambar;
+        }
+      }
+
+      final Map<String, String> attendanceMap = {};
+      for (var doc in attendanceSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final nisn = data['nisn'];
+        final status = data['status'];
+        if (nisn != null && status != null) {
+          attendanceMap[nisn] = status.toString().toLowerCase();
+        }
+      }
+
+      log('⚡ Maps created: ${stopwatch.elapsedMilliseconds}ms');
+
+      // Process all students - now super fast (no more queries!)
       List<StudentAttendanceModel> tempList = [];
 
-      // Proses setiap siswa
       for (var doc in studentSnapshot.docs) {
         try {
           Map<String, dynamic> studentData = doc.data() as Map<String, dynamic>;
           String nisn = doc.id;
 
-          log('Processing siswa: $nisn - ${studentData['nama_siswa']}');
-
-          // Cek apakah wajah sudah terdaftar
-          QuerySnapshot faceSnapshot = await FirebaseFirestore.instance
-              .collection('wajah_siswa')
-              .where('nisn', isEqualTo: nisn)
-              .limit(1)
-              .get();
-
-          bool hasFaceRegistered = faceSnapshot.docs.isNotEmpty;
-
-          String todayStatus = await _getTodayAttendanceStatus(nisn);
+          // Fast lookup from maps - no queries!
+          String? faceImage = faceImageMap[nisn];
+          bool hasFaceRegistered = faceImage != null && faceImage.isNotEmpty;
+          String todayStatus = attendanceMap[nisn] ?? 'belum presensi';
 
           tempList.add(StudentAttendanceModel(
             nisn: nisn,
@@ -151,16 +199,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             jenisKelamin: studentData['jenis_kelamin'] ?? 'Tidak diketahui',
             hasFaceRegistered: hasFaceRegistered,
             todayAttendanceStatus: todayStatus,
+            faceImage: faceImage, // Add face image
           ));
-
-          log('Berhasil memproses siswa: $nisn - Status: $todayStatus');
         } catch (e) {
           log('Error processing siswa ${doc.id}: $e');
           continue;
         }
       }
 
-      log('Total siswa berhasil diproses: ${tempList.length}');
+      stopwatch.stop();
+      log('✅ Total time: ${stopwatch.elapsedMilliseconds}ms');
+      log('✅ Students processed: ${tempList.length}');
 
       setState(() {
         studentList = tempList;
@@ -667,7 +716,55 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return '${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}';
   }
 
+  Future<bool> _requestStoragePermission() async {
+    if (kIsWeb) return true;
+    
+    if (Platform.isAndroid) {
+      final androidInfo = await Future.value(Platform.version);
+      log('Android version info: $androidInfo');
+      
+      // For Android 13+ (API 33+), we don't need WRITE_EXTERNAL_STORAGE
+      // For Android 10-12 (API 29-32), use scoped storage
+      // For Android 9 and below (API 28 and below), request WRITE_EXTERNAL_STORAGE
+      
+      var status = await Permission.storage.status;
+      log('Storage permission status: $status');
+      
+      if (!status.isGranted) {
+        status = await Permission.storage.request();
+        log('Storage permission after request: $status');
+        
+        if (!status.isGranted) {
+          // Try requesting manageExternalStorage for Android 11+
+          if (await Permission.manageExternalStorage.isGranted) {
+            return true;
+          }
+          var manageStatus = await Permission.manageExternalStorage.request();
+          log('Manage external storage permission: $manageStatus');
+          return manageStatus.isGranted;
+        }
+      }
+      
+      return status.isGranted;
+    }
+    
+    return true;
+  }
+
   Future<void> _downloadDailyReport() async {
+    // Request permission first
+    if (!await _requestStoragePermission()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Izin penyimpanan diperlukan untuk menyimpan laporan'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     try {
       setState(() {
         isLoading = true;
@@ -725,55 +822,74 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
       QuerySnapshot studentSnapshot = await studentQuery.get();
 
-      // Create a map to store attendance status for each student
-      Map<String, String> studentAttendance = {};
-      Map<String, String> studentMethods = {};
-      for (var doc in studentSnapshot.docs) {
-        studentAttendance[doc.id] = 'alpha'; // Default status
-        studentMethods[doc.id] = 'manual'; // Default method
-      }
-
-      // Update attendance status from records
+      // Create attendance map with timestamps
+      Map<String, Map<String, dynamic>> attendanceMap = {};
       for (var doc in attendanceSnapshot.docs) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
         String nisn = data['nisn'];
-        String status = data['status'] ?? 'alpha';
-        String metode = data['metode'] ?? 'manual';
-        studentAttendance[nisn] = status;
-        studentMethods[nisn] = metode;
+        attendanceMap[nisn] = {
+          'status': data['status'] ?? 'alpha',
+          'metode': data['metode'] ?? 'manual',
+          'tanggal_waktu': data['tanggal_waktu'],
+        };
       }
 
-      // Prepare CSV data
-      List<List<dynamic>> csvData = [];
+      // Create Excel file
+      var excelFile = excel.Excel.createExcel();
+      var sheet = excelFile.sheets.values.first;
 
-      // Add header row
-      csvData.add([
+      // Add title
+      sheet.appendRow(['LAPORAN KEHADIRAN SISWA']);
+      sheet.appendRow(['Tanggal: ${DateFormat('dd MMMM yyyy').format(selectedDate)}']);
+      sheet.appendRow([]); // Empty row
+
+      // Add header row with bold style
+      sheet.appendRow([
+        'No',
         'NISN',
         'Nama Siswa',
         'Kelas',
         'Jenis Kelamin',
+        'Tanggal',
+        'Waktu',
         'Status Kehadiran',
         'Metode'
       ]);
 
       // Add data rows
+      int no = 1;
       for (var doc in studentSnapshot.docs) {
         Map<String, dynamic> studentData = doc.data() as Map<String, dynamic>;
         String nisn = doc.id;
-        String status = studentAttendance[nisn] ?? 'alpha';
-        String metode = studentMethods[nisn] ?? 'manual';
+        
+        var attendance = attendanceMap[nisn];
+        String status = attendance?['status'] ?? 'alpha';
+        String metode = attendance?['metode'] ?? 'manual';
+        
+        String tanggal = '-';
+        String waktu = '-';
+        if (attendance != null && attendance['tanggal_waktu'] != null) {
+          Timestamp timestamp = attendance['tanggal_waktu'] as Timestamp;
+          DateTime dateTime = timestamp.toDate();
+          tanggal = DateFormat('dd/MM/yyyy').format(dateTime);
+          waktu = DateFormat('HH:mm:ss').format(dateTime);
+        }
 
-        csvData.add([
-          '="' + nisn + '"', // Format to preserve leading zeros
+        sheet.appendRow([
+          no.toString(),
+          nisn,
           studentData['nama_siswa'] ?? 'Nama tidak tersedia',
-          studentData['kelas_sw']?.toUpperCase() ?? 'Tidak diketahui',
+          studentData['kelas_sw']?.toString().toUpperCase() ?? 'Tidak diketahui',
           studentData['jenis_kelamin'] == 'l' ? 'Laki-laki' : 'Perempuan',
+          tanggal,
+          waktu,
           status.toUpperCase(),
           metode == 'face_recognition' ? 'Face Recognition' : 'Manual'
         ]);
+        no++;
       }
 
-      // Add summary row
+      // Add summary section
       Map<String, int> statusCount = {
         'hadir': 0,
         'sakit': 0,
@@ -781,25 +897,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         'alpha': 0
       };
 
-      for (var status in studentAttendance.values) {
+      for (var doc in studentSnapshot.docs) {
+        String nisn = doc.id;
+        String status = attendanceMap[nisn]?['status'] ?? 'alpha';
         statusCount[status] = (statusCount[status] ?? 0) + 1;
       }
 
-      csvData.add([]); // Empty row
-      csvData.add(['REKAPITULASI KEHADIRAN']);
-      csvData.add(['Tanggal', _formatDate(selectedDate)]);
-      csvData.add(['Total Siswa', studentSnapshot.docs.length.toString()]);
-      csvData.add(['Hadir', statusCount['hadir'].toString()]);
-      csvData.add(['Sakit', statusCount['sakit'].toString()]);
-      csvData.add(['Izin', statusCount['izin'].toString()]);
-      csvData.add(['Alpha', statusCount['alpha'].toString()]);
-
-      // Convert to CSV
-      String csv = const ListToCsvConverter().convert(csvData);
+      sheet.appendRow([]); // Empty row
+      sheet.appendRow(['REKAPITULASI KEHADIRAN']);
+      sheet.appendRow(['Total Siswa', studentSnapshot.docs.length.toString()]);
+      sheet.appendRow(['Hadir', statusCount['hadir'].toString()]);
+      sheet.appendRow(['Sakit', statusCount['sakit'].toString()]);
+      sheet.appendRow(['Izin', statusCount['izin'].toString()]);
+      sheet.appendRow(['Alpha', statusCount['alpha'].toString()]);
 
       // Generate filename
       String filename =
-          'laporan_kehadiran_${_formatDateForFilename(selectedDate)}.csv';
+          'laporan_kehadiran_${_formatDateForFilename(selectedDate)}.xlsx';
 
       // Save report data to Firestore
       await FirebaseFirestore.instance.collection('laporan').doc(newId).set({
@@ -810,31 +924,243 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
       if (kIsWeb) {
         // Web platform
-        final bytes = utf8.encode(csv);
+        final bytes = excelFile.encode();
         final blob = html.Blob([bytes]);
         final url = html.Url.createObjectUrlFromBlob(blob);
         html.AnchorElement(href: url)
           ..setAttribute('download', filename)
           ..click();
         html.Url.revokeObjectUrl(url);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Laporan berhasil diunduh'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       } else {
-        // Mobile platform
-        final directory = await getTemporaryDirectory();
-        final file = File('${directory.path}/$filename');
-        await file.writeAsString(csv);
-        await Share.shareXFiles(
-          [XFile(file.path)],
-          text: 'Laporan Kehadiran ${_formatDate(selectedDate)}',
-        );
-      }
+        // Mobile platform - Save to Downloads folder
+        try {
+          String? downloadsPath;
+          
+          if (Platform.isAndroid) {
+            // For Android, try multiple standard Downloads paths
+            final possiblePaths = [
+              '/storage/emulated/0/Download',
+              '/storage/emulated/0/Downloads',
+              '/sdcard/Download',
+              '/sdcard/Downloads',
+            ];
+            
+            // Check which path exists
+            for (final path in possiblePaths) {
+              final dir = Directory(path);
+              if (await dir.exists()) {
+                downloadsPath = path;
+                log('Found existing downloads directory: $downloadsPath');
+                break;
+              }
+            }
+            
+            // If no path exists, use first one and it will be created
+            downloadsPath ??= possiblePaths[0];
+            log('Will use downloads directory: $downloadsPath');
+          } else {
+            // For iOS and other platforms
+            final directory = await getApplicationDocumentsDirectory();
+            downloadsPath = directory.path;
+          }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Laporan berhasil diunduh'),
-            backgroundColor: Colors.green,
-          ),
-        );
+          final filePath = '$downloadsPath/$filename';
+          final file = File(filePath);
+          
+          log('Attempting to save file to: $filePath');
+          
+          // Ensure directory exists
+          await file.parent.create(recursive: true);
+          log('Directory created/verified: ${file.parent.path}');
+          
+          // Write file
+          final bytes = excelFile.encode()!;
+          await file.writeAsBytes(bytes);
+          log('File written, bytes: ${bytes.length}');
+          
+          // Verify file exists and has content
+          final fileExists = await file.exists();
+          final fileSize = fileExists ? await file.length() : 0;
+          
+          log('File verification - Exists: $fileExists, Size: $fileSize bytes');
+          
+          if (!fileExists || fileSize == 0) {
+            throw Exception('File gagal disimpan atau ukuran file 0 bytes');
+          }
+          
+          // Note: File is saved successfully
+          // To make it visible in File Manager, user may need to:
+          // 1. Refresh the Downloads folder (pull down to refresh)
+          // 2. Restart File Manager app
+          // 3. Or use "Open File" button which works immediately
+          
+          log('✅ File successfully saved to: $filePath');
+          
+          // Show toast notification
+          if (mounted) {
+            Fluttertoast.showToast(
+              msg: "✅ File tersimpan di folder Download",
+              toastLength: Toast.LENGTH_SHORT,
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.green,
+              textColor: Colors.white,
+              fontSize: 16.0
+            );
+          }
+            
+            if (mounted) {
+              // Show success dialog with file path and option to open
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green, size: 28),
+                        SizedBox(width: 12),
+                        Text('Laporan Berhasil Disimpan'),
+                      ],
+                    ),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'File laporan telah tersimpan di:',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: SelectableText(
+                            filePath,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Ukuran: ${(fileSize / 1024).toStringAsFixed(2)} KB',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange[300]!),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange[700]),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'File Mungkin Belum Terlihat',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Jika file tidak muncul di folder Download:\n'
+                                '1. Tekan tombol "Buka File" di bawah (pasti bisa!)\n'
+                                '2. Atau refresh folder Download (geser ke bawah)\n'
+                                '3. Atau restart File Manager\n'
+                                '4. Atau restart HP Anda',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Pilih cara membuka file:',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Tutup'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          final result = await OpenFile.open(filePath);
+                          log('OpenFile result: ${result.message}');
+                          if (result.type == ResultType.done) {
+                            Fluttertoast.showToast(
+                              msg: "✅ File berhasil dibuka",
+                              toastLength: Toast.LENGTH_SHORT,
+                              gravity: ToastGravity.BOTTOM,
+                              backgroundColor: Colors.green,
+                            );
+                          } else if (result.type == ResultType.noAppToOpen) {
+                            Fluttertoast.showToast(
+                              msg: "⚠️ Tidak ada aplikasi untuk membuka file Excel.\nSilakan install Microsoft Excel, Google Sheets, atau WPS Office",
+                              toastLength: Toast.LENGTH_LONG,
+                              gravity: ToastGravity.CENTER,
+                              backgroundColor: Colors.orange,
+                            );
+                          } else {
+                            Fluttertoast.showToast(
+                              msg: "⚠️ ${result.message}",
+                              toastLength: Toast.LENGTH_SHORT,
+                              gravity: ToastGravity.BOTTOM,
+                              backgroundColor: Colors.red,
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.file_open, size: 18),
+                        label: const Text('Buka File'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4CAF50),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            }
+        } catch (e) {
+          log('Error saving to storage: $e');
+          // Fallback to sharing if direct save fails
+          final directory = await getTemporaryDirectory();
+          final file = File('${directory.path}/$filename');
+          await file.writeAsBytes(excelFile.encode()!);
+          await Share.shareXFiles(
+            [XFile(file.path)],
+            text: 'Laporan Kehadiran ${DateFormat('dd MMMM yyyy').format(selectedDate)}',
+          );
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('File dibagikan karena tidak dapat langsung disimpan ke penyimpanan'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       log('Error downloading report: $e');
@@ -1181,6 +1507,426 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _buildStudentCard(StudentAttendanceModel student) {
+    final hasAttended = student.todayAttendanceStatus != 'belum presensi';
+    final statusColor = hasAttended ? statusColors[student.todayAttendanceStatus] : Colors.grey;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: hasAttended
+              ? [Colors.white, statusColor!.withOpacity(0.05)]
+              : [Colors.white, const Color(0xFFF5F5F5)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: hasAttended
+              ? statusColor!.withOpacity(0.3)
+              : Colors.grey.withOpacity(0.2),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: hasAttended
+                ? statusColor!.withOpacity(0.15)
+                : Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showAttendanceHistory(student),
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                // Header: Avatar + Name + Edit Button
+                Row(
+                  children: [
+                    // Avatar with status indicator
+                    Stack(
+                      children: [
+                        // Display photo if available, otherwise show icon
+                        student.faceImage != null && student.faceImage!.isNotEmpty
+                            ? Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: student.jenisKelamin == 'l'
+                                        ? const Color(0xFF2196F3)
+                                        : const Color(0xFFE91E63),
+                                    width: 3,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: (student.jenisKelamin == 'l'
+                                              ? const Color(0xFF2196F3)
+                                              : const Color(0xFFE91E63))
+                                          .withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipOval(
+                                  child: Image.memory(
+                                    base64Decode(student.faceImage!),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      // If image fails to load, show icon
+                                      return Container(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: student.jenisKelamin == 'l'
+                                                ? [const Color(0xFF2196F3), const Color(0xFF42A5F5)]
+                                                : [const Color(0xFFE91E63), const Color(0xFFF48FB1)],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          student.jenisKelamin == 'l'
+                                              ? Icons.face
+                                              : Icons.face_3,
+                                          color: Colors.white,
+                                          size: 28,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: student.jenisKelamin == 'l'
+                                        ? [const Color(0xFF2196F3), const Color(0xFF42A5F5)]
+                                        : [const Color(0xFFE91E63), const Color(0xFFF48FB1)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: (student.jenisKelamin == 'l'
+                                              ? const Color(0xFF2196F3)
+                                              : const Color(0xFFE91E63))
+                                          .withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  student.jenisKelamin == 'l'
+                                      ? Icons.face
+                                      : Icons.face_3,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                              ),
+                        // Face registration status indicator
+                        if (student.hasFaceRegistered)
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: const Icon(
+                                Icons.verified,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 16),
+                    // Student Info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  student.nama,
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF2C3E50),
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ),
+                              // Edit button
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF4CAF50).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: IconButton(
+                                  onPressed: () => _showEditStudentDialog(student),
+                                  icon: const Icon(Icons.edit_rounded, size: 18),
+                                  color: const Color(0xFF4CAF50),
+                                  padding: const EdgeInsets.all(8),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 36,
+                                    minHeight: 36,
+                                  ),
+                                  tooltip: 'Edit Data Siswa',
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          // Info badges row
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              // NISN Badge
+                              _buildInfoBadge(
+                                Icons.badge_rounded,
+                                student.nisn,
+                                const Color(0xFF9C27B0),
+                              ),
+                              // Kelas Badge
+                              _buildInfoBadge(
+                                Icons.school_rounded,
+                                'Kelas ${student.kelas.toUpperCase()}',
+                                const Color(0xFF4CAF50),
+                              ),
+                              // Gender Badge
+                              _buildInfoBadge(
+                                student.jenisKelamin == 'l'
+                                    ? Icons.male
+                                    : Icons.female,
+                                genderLabels[student.jenisKelamin] ?? student.jenisKelamin,
+                                student.jenisKelamin == 'l'
+                                    ? const Color(0xFF2196F3)
+                                    : const Color(0xFFE91E63),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 16),
+
+                // Status Buttons (Beautified)
+                Row(
+                  children: statusOptions.map((status) {
+                    bool isSelected = student.todayAttendanceStatus == status;
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: GestureDetector(
+                          onTap: () => _showQuickManualAttendance(student),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              gradient: isSelected
+                                  ? LinearGradient(
+                                      colors: [
+                                        statusColors[status]!,
+                                        statusColors[status]!.withOpacity(0.8),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    )
+                                  : null,
+                              color: isSelected ? null : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? statusColors[status]!
+                                    : Colors.grey.withOpacity(0.3),
+                                width: 1.5,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: statusColors[status]!.withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  statusIcons[status],
+                                  size: 22,
+                                  color: isSelected ? Colors.white : Colors.grey[600],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  status[0].toUpperCase() + status.substring(1),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: isSelected ? Colors.white : Colors.grey[700],
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                
+                const SizedBox(height: 14),
+
+                // Action Buttons (Beautified)
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF4CAF50).withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _showQuickManualAttendance(student),
+                            borderRadius: BorderRadius.circular(12),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.edit_calendar_rounded, size: 18, color: Colors.white),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Presensi Manual',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: const Color(0xFF2196F3),
+                            width: 1.5,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _showAttendanceHistory(student),
+                            borderRadius: BorderRadius.circular(12),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.history_rounded, size: 18, color: Color(0xFF2196F3)),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Lihat Riwayat',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF2196F3),
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoBadge(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: color.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStudentCard_OLD(StudentAttendanceModel student) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
@@ -1769,6 +2515,7 @@ class StudentAttendanceModel {
   final String jenisKelamin;
   final bool hasFaceRegistered;
   final String todayAttendanceStatus;
+  final String? faceImage; // Base64 image string
 
   StudentAttendanceModel({
     required this.nisn,
@@ -1777,6 +2524,7 @@ class StudentAttendanceModel {
     required this.jenisKelamin,
     required this.hasFaceRegistered,
     required this.todayAttendanceStatus,
+    this.faceImage,
   });
 }
 
@@ -1832,7 +2580,50 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     return '${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}';
   }
 
+  Future<bool> _requestStoragePermission() async {
+    if (kIsWeb) return true;
+    
+    if (Platform.isAndroid) {
+      final androidInfo = await Future.value(Platform.version);
+      log('Android version info: $androidInfo');
+      
+      var status = await Permission.storage.status;
+      log('Storage permission status: $status');
+      
+      if (!status.isGranted) {
+        status = await Permission.storage.request();
+        log('Storage permission after request: $status');
+        
+        if (!status.isGranted) {
+          if (await Permission.manageExternalStorage.isGranted) {
+            return true;
+          }
+          var manageStatus = await Permission.manageExternalStorage.request();
+          log('Manage external storage permission: $manageStatus');
+          return manageStatus.isGranted;
+        }
+      }
+      
+      return status.isGranted;
+    }
+    
+    return true;
+  }
+
   Future<void> _downloadDailyReport() async {
+    // Request permission first
+    if (!await _requestStoragePermission()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Izin penyimpanan diperlukan untuk menyimpan laporan'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     try {
       setState(() {
         isLoading = true;
@@ -1869,20 +2660,31 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         newId = 'idlpmi${(lastNumber + 1).toString().padLeft(4, '0')}';
       }
 
-      // Prepare CSV data
-      List<List<dynamic>> csvData = [];
+      // Create Excel file
+      var excelFile = excel.Excel.createExcel();
+      var sheet = excelFile.sheets.values.first;
+
+      // Add title
+      sheet.appendRow(['RIWAYAT KEHADIRAN SISWA']);
+      sheet.appendRow(['Nama: ${widget.student.nama}']);
+      sheet.appendRow(['NISN: ${widget.student.nisn}']);
+      sheet.appendRow(['Kelas: ${widget.student.kelas.toUpperCase()}']);
+      sheet.appendRow([]); // Empty row
 
       // Add header row
-      csvData.add(['Tanggal', 'Waktu', 'Status', 'Metode']);
+      sheet.appendRow(['No', 'Tanggal', 'Waktu', 'Status', 'Metode']);
 
       // Add data rows
+      int no = 1;
       for (var record in attendanceHistory) {
-        csvData.add([
-          _formatDate(record.tanggalWaktu),
-          _formatTime(record.tanggalWaktu),
+        sheet.appendRow([
+          no.toString(),
+          DateFormat('dd/MM/yyyy').format(record.tanggalWaktu),
+          DateFormat('HH:mm:ss').format(record.tanggalWaktu),
           record.status.toUpperCase(),
           record.metode == 'face_recognition' ? 'Face Recognition' : 'Manual'
         ]);
+        no++;
       }
 
       // Add summary section
@@ -1897,26 +2699,17 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         statusCount[record.status] = (statusCount[record.status] ?? 0) + 1;
       }
 
-      csvData.add([]); // Empty row
-      csvData.add(['REKAPITULASI KEHADIRAN']);
-      csvData.add(['Nama Siswa', widget.student.nama]);
-      csvData.add([
-        'NISN',
-        '="${widget.student.nisn}"'
-      ]); // Format to preserve leading zeros
-      csvData.add(['Kelas', widget.student.kelas.toUpperCase()]);
-      csvData.add(['Total Presensi', attendanceHistory.length.toString()]);
-      csvData.add(['Hadir', statusCount['hadir'].toString()]);
-      csvData.add(['Sakit', statusCount['sakit'].toString()]);
-      csvData.add(['Izin', statusCount['izin'].toString()]);
-      csvData.add(['Alpha', statusCount['alpha'].toString()]);
-
-      // Convert to CSV
-      String csv = const ListToCsvConverter().convert(csvData);
+      sheet.appendRow([]); // Empty row
+      sheet.appendRow(['REKAPITULASI KEHADIRAN']);
+      sheet.appendRow(['Total Presensi', attendanceHistory.length.toString()]);
+      sheet.appendRow(['Hadir', statusCount['hadir'].toString()]);
+      sheet.appendRow(['Sakit', statusCount['sakit'].toString()]);
+      sheet.appendRow(['Izin', statusCount['izin'].toString()]);
+      sheet.appendRow(['Alpha', statusCount['alpha'].toString()]);
 
       // Generate filename
       String filename =
-          'laporan_kehadiran_${widget.student.nisn}_${_formatDateForFilename(DateTime.now())}.csv';
+          'riwayat_kehadiran_${widget.student.nisn}_${_formatDateForFilename(DateTime.now())}.xlsx';
 
       // Save report data to Firestore
       await FirebaseFirestore.instance.collection('laporan').doc(newId).set({
@@ -1927,31 +2720,243 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
       if (kIsWeb) {
         // Web platform
-        final bytes = utf8.encode(csv);
+        final bytes = excelFile.encode();
         final blob = html.Blob([bytes]);
         final url = html.Url.createObjectUrlFromBlob(blob);
         html.AnchorElement(href: url)
           ..setAttribute('download', filename)
           ..click();
         html.Url.revokeObjectUrl(url);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Laporan berhasil diunduh'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       } else {
-        // Mobile platform
-        final directory = await getTemporaryDirectory();
-        final file = File('${directory.path}/$filename');
-        await file.writeAsString(csv);
-        await Share.shareXFiles(
-          [XFile(file.path)],
-          text: 'Laporan Kehadiran ${widget.student.nama}',
-        );
-      }
+        // Mobile platform - Save to Downloads folder
+        try {
+          String? downloadsPath;
+          
+          if (Platform.isAndroid) {
+            // For Android, try multiple standard Downloads paths
+            final possiblePaths = [
+              '/storage/emulated/0/Download',
+              '/storage/emulated/0/Downloads',
+              '/sdcard/Download',
+              '/sdcard/Downloads',
+            ];
+            
+            // Check which path exists
+            for (final path in possiblePaths) {
+              final dir = Directory(path);
+              if (await dir.exists()) {
+                downloadsPath = path;
+                log('Found existing downloads directory: $downloadsPath');
+                break;
+              }
+            }
+            
+            // If no path exists, use first one and it will be created
+            downloadsPath ??= possiblePaths[0];
+            log('Will use downloads directory: $downloadsPath');
+          } else {
+            // For iOS and other platforms
+            final directory = await getApplicationDocumentsDirectory();
+            downloadsPath = directory.path;
+          }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Laporan berhasil diunduh'),
-            backgroundColor: Colors.green,
-          ),
-        );
+          final filePath = '$downloadsPath/$filename';
+          final file = File(filePath);
+          
+          log('Attempting to save file to: $filePath');
+          
+          // Ensure directory exists
+          await file.parent.create(recursive: true);
+          log('Directory created/verified: ${file.parent.path}');
+          
+          // Write file
+          final bytes = excelFile.encode()!;
+          await file.writeAsBytes(bytes);
+          log('File written, bytes: ${bytes.length}');
+          
+          // Verify file exists and has content
+          final fileExists = await file.exists();
+          final fileSize = fileExists ? await file.length() : 0;
+          
+          log('File verification - Exists: $fileExists, Size: $fileSize bytes');
+          
+          if (!fileExists || fileSize == 0) {
+            throw Exception('File gagal disimpan atau ukuran file 0 bytes');
+          }
+          
+          // Note: File is saved successfully
+          // To make it visible in File Manager, user may need to:
+          // 1. Refresh the Downloads folder (pull down to refresh)
+          // 2. Restart File Manager app
+          // 3. Or use "Open File" button which works immediately
+          
+          log('✅ File successfully saved to: $filePath');
+          
+          // Show toast notification
+          if (mounted) {
+            Fluttertoast.showToast(
+              msg: "✅ File tersimpan di folder Download",
+              toastLength: Toast.LENGTH_SHORT,
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.green,
+              textColor: Colors.white,
+              fontSize: 16.0
+            );
+          }
+            
+            if (mounted) {
+              // Show success dialog with file path and option to open
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green, size: 28),
+                        SizedBox(width: 12),
+                        Text('Laporan Berhasil Disimpan'),
+                      ],
+                    ),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'File laporan telah tersimpan di:',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: SelectableText(
+                            filePath,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Ukuran: ${(fileSize / 1024).toStringAsFixed(2)} KB',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange[300]!),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange[700]),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'File Mungkin Belum Terlihat',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Jika file tidak muncul di folder Download:\n'
+                                '1. Tekan tombol "Buka File" di bawah (pasti bisa!)\n'
+                                '2. Atau refresh folder Download (geser ke bawah)\n'
+                                '3. Atau restart File Manager\n'
+                                '4. Atau restart HP Anda',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Pilih cara membuka file:',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Tutup'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          final result = await OpenFile.open(filePath);
+                          log('OpenFile result: ${result.message}');
+                          if (result.type == ResultType.done) {
+                            Fluttertoast.showToast(
+                              msg: "✅ File berhasil dibuka",
+                              toastLength: Toast.LENGTH_SHORT,
+                              gravity: ToastGravity.BOTTOM,
+                              backgroundColor: Colors.green,
+                            );
+                          } else if (result.type == ResultType.noAppToOpen) {
+                            Fluttertoast.showToast(
+                              msg: "⚠️ Tidak ada aplikasi untuk membuka file Excel.\nSilakan install Microsoft Excel, Google Sheets, atau WPS Office",
+                              toastLength: Toast.LENGTH_LONG,
+                              gravity: ToastGravity.CENTER,
+                              backgroundColor: Colors.orange,
+                            );
+                          } else {
+                            Fluttertoast.showToast(
+                              msg: "⚠️ ${result.message}",
+                              toastLength: Toast.LENGTH_SHORT,
+                              gravity: ToastGravity.BOTTOM,
+                              backgroundColor: Colors.red,
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.file_open, size: 18),
+                        label: const Text('Buka File'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4CAF50),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            }
+        } catch (e) {
+          log('Error saving to storage: $e');
+          // Fallback to sharing if direct save fails
+          final directory = await getTemporaryDirectory();
+          final file = File('${directory.path}/$filename');
+          await file.writeAsBytes(excelFile.encode()!);
+          await Share.shareXFiles(
+            [XFile(file.path)],
+            text: 'Riwayat Kehadiran ${widget.student.nama}',
+          );
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('File dibagikan karena tidak dapat langsung disimpan ke penyimpanan'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       log('Error downloading report: $e');

@@ -339,6 +339,19 @@ class _DashboardScreenState extends State<DashboardPage>
     });
   }
 
+  // Get next schedule after the given schedule
+  ScheduleModel? _getNextScheduleAfter(ScheduleModel schedule) {
+    if (todaySchedule.isEmpty) return null;
+    
+    int currentIndex = todaySchedule.indexWhere((s) => s.id == schedule.id);
+    
+    if (currentIndex == -1 || currentIndex >= todaySchedule.length - 1) {
+      return null; // No next schedule available
+    }
+    
+    return todaySchedule[currentIndex + 1];
+  }
+
   Future<void> _refreshData() async {
     await Future.wait([
       _loadTodaySchedule(),
@@ -915,23 +928,65 @@ class _DashboardScreenState extends State<DashboardPage>
                     ),
                   ),
 
-                  // Show additional info if there are more schedules
-                  if (todaySchedule.length > 1) ...[
-                    const SizedBox(height: 16),
+                  // Show next schedule info if available
+                  if (_getNextScheduleAfter(scheduleToShow) != null) ...[
+                    const SizedBox(height: 20),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        '+${todaySchedule.length - 1} jadwal mata pelajaran lainnya',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 1,
                         ),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Mata Pelajaran Selanjutnya',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white.withOpacity(0.9),
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.25),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '${_formatTimeOfDay(_getNextScheduleAfter(scheduleToShow)!.jamMulai)} - ${_formatTimeOfDay(_getNextScheduleAfter(scheduleToShow)!.jamSelesai)}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  _getNextScheduleAfter(scheduleToShow)!.mataPelajaran,
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ],

@@ -646,10 +646,10 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
                   Container(
                     padding: const EdgeInsets.all(32),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
+                      gradient: const LinearGradient(
                         colors: [
-                          const Color(0xFF4CAF50),
-                          const Color(0xFF66BB6A),
+                          Color(0xFF4CAF50),
+                          Color(0xFF66BB6A),
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -757,10 +757,10 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
                               vertical: 20,
                             ),
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
+                              gradient: const LinearGradient(
                                 colors: [
-                                  const Color(0xFF2196F3),
-                                  const Color(0xFF42A5F5),
+                                  Color(0xFF2196F3),
+                                  Color(0xFF42A5F5),
                                 ],
                               ),
                               borderRadius: BorderRadius.circular(16),
