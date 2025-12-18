@@ -45,6 +45,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     
     // Reset flag untuk memastikan state bersih
     _isProcessingAttendance = false;
+    _resetRealtimeState(); // pastikan state auto-presensi bersih di awal
 
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 1000),
@@ -83,6 +84,26 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     _nameController.dispose();
     _countdownTimer?.cancel();
     super.dispose();
+  }
+
+  /// Reset penuh state yang dipakai auto-presensi agar embedding/flag lama tidak terbawa
+  void _resetRealtimeState() {
+    _lastDetectedTrackingId = null;
+    _stableFrameCount = 0;
+    _currentConfidenceScore = null;
+    _isAutoProcessing = false;
+    _inConfirmation = false;
+    _hasCompletedAttendance = false;
+    _consecutiveFailCount = 0;
+    _sessionStartTime = DateTime.now();
+    _lastCandidateNisn = null;
+    _consistentMatchCount = 0;
+    _candidateMatch = null;
+    _candidateStudentName = null;
+    _countdownTimer?.cancel();
+    _countdown = 3;
+    _lastSuccessNotificationTime = null;
+    _lastFailureDialogTime = null;
   }
 
   // Function to generate attendance ID - IMPROVED VERSION with race condition prevention
@@ -231,6 +252,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                   TextButton(
                     onPressed: () {
                       Navigator.of(context).pop();
+                      Navigator.of(context).popUntil((route) => route.isFirst);
                     },
                     child: const Text(
                       'OK',
@@ -713,6 +735,12 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   double? _currentConfidenceScore;
   String _currentLightingCondition = 'normal';
   String _currentFaceDetectionMode = 'fast';
+  int _consecutiveFailCount = 0; // cegah notif gagal terlalu dini
+  DateTime _sessionStartTime = DateTime.now();
+  static const int _minFailDelayMs = 1500; // tunda notif gagal setidaknya 1.5 detik sejak kamera aktif
+  String? _lastCandidateNisn; // konsistensi kandidat agar tidak lompat antar user
+  int _consistentMatchCount = 0;
+  static const int _minConsistentMatches = 2; // butuh match konsisten berturut-turut sebelum konfirmasi
 
   Future<void> _loadRegisteredFaces() async {
     if (_isLoadingUsers) {
@@ -898,6 +926,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     setState(() {
       isMatching = true;
       _isAutoProcessing = true;
+      _consecutiveFailCount = 0; // reset counter gagal pada awal siklus
     });
     
     try {
@@ -971,7 +1000,6 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
           log('Error comparing with user ${user.nisn}: $e', name: 'FaceMatch');
         }
       }
-      
       final matchTime = DateTime.now().difference(matchStartTime).inMilliseconds;
       log('✓ Face matching: ${matchTime}ms (${validComparisonCount} users checked)', name: 'Performance');
 
@@ -1001,6 +1029,26 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       const double strictThreshold = 0.11; // Sedikit lebih longgar untuk recognition lebih baik
       
       if (bestUser != null && bestScore < strictThreshold) {
+        // Cek konsistensi kandidat agar tidak lompat user antar frame
+        if (_lastCandidateNisn == bestUser.nisn) {
+          _consistentMatchCount++;
+        } else {
+          _lastCandidateNisn = bestUser.nisn;
+          _consistentMatchCount = 1;
+        }
+        if (_consistentMatchCount < _minConsistentMatches) {
+          log('⏳ Waiting for consistent match (${_consistentMatchCount}/$_minConsistentMatches) for NISN ${bestUser.nisn}', name: 'FaceMatch');
+          setState(() {
+            isMatching = false;
+            _isAutoProcessing = false;
+            _currentConfidenceScore = confidenceScore;
+          });
+          return;
+        }
+        // Reset counter setelah konsisten terpenuhi untuk menghindari carryover
+        _consistentMatchCount = 0;
+        _lastCandidateNisn = null;
+
         // ===== WAJAH COCOK - CEK PRESENSI GANDA DULU =====
         log('✅ ✅ ✅ MATCH FOUND! Score: ${bestScore.toStringAsFixed(4)} < $strictThreshold for NISN: ${bestUser.nisn}', name: 'FaceMatch');
         
@@ -1075,6 +1123,26 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
           });
           return;
         }
+
+        // Jika belum ada perbandingan valid, tetap lanjutkan failure flow (data wajah terdaftar mungkin tidak lengkap)
+        if (validComparisonCount == 0) {
+          log('⚠️ No valid comparisons (data wajah terdaftar kurang lengkap), tetap lanjutkan failure flow', name: 'FaceMatch');
+        }
+
+        // Tambah syarat: tunda notif gagal sampai minimal ada jeda & minimal 2 kegagalan beruntun
+        _consecutiveFailCount++;
+        final elapsedMs = DateTime.now().difference(_sessionStartTime).inMilliseconds;
+        if (_consecutiveFailCount < 2 || elapsedMs < _minFailDelayMs) {
+          log('⏳ Delay failure notification (failCount=$_consecutiveFailCount, elapsed=${elapsedMs}ms)', name: 'FaceMatch');
+          setState(() {
+            isMatching = false;
+            _isAutoProcessing = false;
+            _lastDetectedTrackingId = null;
+            _stableFrameCount = 0;
+            _currentConfidenceScore = null;
+          });
+          return;
+        }
         
         if (bestUser != null) {
           log('✗ Face similarity too low: ${bestScore.toStringAsFixed(4)} >= $strictThreshold (Best match: NISN ${bestUser.nisn})', name: 'FaceMatch');
@@ -1119,6 +1187,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
           _lastDetectedTrackingId = null;
           _stableFrameCount = 0;
           _currentConfidenceScore = null;
+          _consecutiveFailCount = 0; // reset setelah dialog tampil
+          _lastCandidateNisn = null;
+          _consistentMatchCount = 0;
         });
       }
     } catch (e) {
@@ -1554,13 +1625,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.of(context).pop();
-                  // Navigasi ke halaman AuthenticateScreen (halaman presensi/foto ulang)
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (context) => const AuthenticateScreen(),
-                    ),
-                  );
+                      Navigator.of(context).pop();
+                      // Kembali ke beranda (pop semua sampai root)
+                      Navigator.of(context).popUntil((route) => route.isFirst);
                 },
                 child: const Text(
                   'OK',

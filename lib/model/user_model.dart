@@ -8,6 +8,7 @@ class UserModel {
   String? name;
   String? gambar;
   FaceFeatures? faceFeatures;
+  List<List<double>>? faceEmbeddings;
   Timestamp? registeredOn;
 
   UserModel({
@@ -16,10 +17,24 @@ class UserModel {
     this.name,
     this.gambar,
     this.faceFeatures,
+    this.faceEmbeddings,
     this.registeredOn,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    List<List<double>>? _parseEmbeddings(dynamic raw) {
+      if (raw is List) {
+        final parsed = <List<double>>[];
+        for (final sample in raw) {
+          if (sample is List) {
+            parsed.add(sample.map((v) => (v as num).toDouble()).toList());
+          }
+        }
+        if (parsed.isNotEmpty) return parsed;
+      }
+      return null;
+    }
+
     return UserModel(
       idWajah: json['id_wajah'],
       nisn: json['nisn'],
@@ -28,6 +43,7 @@ class UserModel {
       faceFeatures: json["faceFeatures"] != null
           ? FaceFeatures.fromJson(json["faceFeatures"])
           : null,
+      faceEmbeddings: _parseEmbeddings(json['faceEmbeddings']),
       registeredOn: json['registeredOn'],
     );
   }
@@ -39,6 +55,7 @@ class UserModel {
       'name': name,
       'gambar': gambar,
       'faceFeatures': faceFeatures?.toJson() ?? {},
+      'faceEmbeddings': faceEmbeddings,
       'registeredOn': registeredOn,
     };
   }
