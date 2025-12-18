@@ -94,10 +94,10 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     _isAutoProcessing = false;
     _inConfirmation = false;
     _hasCompletedAttendance = false;
-    _consecutiveFailCount = 0;
     _sessionStartTime = DateTime.now();
     _lastCandidateNisn = null;
     _consistentMatchCount = 0;
+    _failStreak = 0;
     _candidateMatch = null;
     _candidateStudentName = null;
     _countdownTimer?.cancel();
@@ -735,12 +735,12 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   double? _currentConfidenceScore;
   String _currentLightingCondition = 'normal';
   String _currentFaceDetectionMode = 'fast';
-  int _consecutiveFailCount = 0; // cegah notif gagal terlalu dini
   DateTime _sessionStartTime = DateTime.now();
-  static const int _minFailDelayMs = 1500; // tunda notif gagal setidaknya 1.5 detik sejak kamera aktif
+  static const int _minFailDelayMs = 800; // tunda notif gagal minimal 0.8 detik sejak kamera aktif
   String? _lastCandidateNisn; // konsistensi kandidat agar tidak lompat antar user
   int _consistentMatchCount = 0;
   static const int _minConsistentMatches = 2; // butuh match konsisten berturut-turut sebelum konfirmasi
+  int _failStreak = 0; // smoothing agar wajah terdaftar tidak langsung gagal karena noise
 
   Future<void> _loadRegisteredFaces() async {
     if (_isLoadingUsers) {
@@ -926,7 +926,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     setState(() {
       isMatching = true;
       _isAutoProcessing = true;
-      _consecutiveFailCount = 0; // reset counter gagal pada awal siklus
+      _failStreak = 0; // reset fail streak di awal siklus matching
     });
     
     try {
@@ -949,10 +949,11 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       // GUARD: Cek lagi setelah async operation (ekstraksi fitur)
       if (_inConfirmation || _hasCompletedAttendance) {
         log('⚠️ ABORT: confirmation/completion started during feature extraction', name: 'AutoPresensi');
-        setState(() {
-          isMatching = false;
-          _isAutoProcessing = false;
-        });
+    setState(() {
+      isMatching = false;
+      _isAutoProcessing = false;
+      _failStreak = 0;
+    });
         return;
       }
       
@@ -1124,16 +1125,15 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
           return;
         }
 
-        // Jika belum ada perbandingan valid, tetap lanjutkan failure flow (data wajah terdaftar mungkin tidak lengkap)
-        if (validComparisonCount == 0) {
-          log('⚠️ No valid comparisons (data wajah terdaftar kurang lengkap), tetap lanjutkan failure flow', name: 'FaceMatch');
-        }
+      // Jika belum ada perbandingan valid, tetap lanjutkan failure flow (data wajah terdaftar mungkin tidak lengkap)
+      if (validComparisonCount == 0) {
+        log('⚠️ No valid comparisons (data wajah terdaftar kurang lengkap), tetap lanjutkan failure flow', name: 'FaceMatch');
+      }
 
-        // Tambah syarat: tunda notif gagal sampai minimal ada jeda & minimal 2 kegagalan beruntun
-        _consecutiveFailCount++;
+        // Tambah syarat: tunda notif gagal sampai minimal ada jeda awal, tapi tidak menunggu fail ke-2
         final elapsedMs = DateTime.now().difference(_sessionStartTime).inMilliseconds;
-        if (_consecutiveFailCount < 2 || elapsedMs < _minFailDelayMs) {
-          log('⏳ Delay failure notification (failCount=$_consecutiveFailCount, elapsed=${elapsedMs}ms)', name: 'FaceMatch');
+        if (elapsedMs < _minFailDelayMs) {
+          log('⏳ Delay failure notification (elapsed=${elapsedMs}ms)', name: 'FaceMatch');
           setState(() {
             isMatching = false;
             _isAutoProcessing = false;
@@ -1168,6 +1168,30 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         
         // Failure TIDAK di-log (by design: hanya success yang tercatat)
         log('⚠️ Face matching failed but not logged to metrics', name: 'AccuracyTracking');
+
+        // Set confidence/accuracy untuk UI meski gagal
+        final failureConfidence = bestScore.isFinite
+            ? TrackingHelper.convertGeometricScoreToConfidence(bestScore)
+            : 0.0;
+        setState(() {
+          _currentConfidenceScore = failureConfidence;
+        });
+        
+        // Smoothing: jika ada kandidat (bestUser != null), butuh 2 kegagalan berturut-turut sebelum dialog
+        final bool hasCandidate = bestUser != null;
+        if (hasCandidate && _failStreak < 1) {
+          _failStreak += 1;
+          log('⏳ Delay failure for registered-face candidate (failStreak=$_failStreak)', name: 'FaceMatch');
+          setState(() {
+            isMatching = false;
+            _isAutoProcessing = false;
+            _lastDetectedTrackingId = null;
+            _stableFrameCount = 0;
+          });
+          return;
+        }
+        // Reset fail streak setelah akan menampilkan dialog
+        _failStreak = 0;
         
         // Tampilkan dialog popup untuk wajah tidak cocok
         if (bestUser != null) {
@@ -1187,7 +1211,6 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
           _lastDetectedTrackingId = null;
           _stableFrameCount = 0;
           _currentConfidenceScore = null;
-          _consecutiveFailCount = 0; // reset setelah dialog tampil
           _lastCandidateNisn = null;
           _consistentMatchCount = 0;
         });
