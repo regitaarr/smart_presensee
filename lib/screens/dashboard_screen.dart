@@ -188,7 +188,10 @@ class _DashboardScreenState extends State<DashboardPage>
       Set<String> relevantStudentNisns =
           studentSnapshot.docs.map((doc) => doc.id).toSet();
 
-      // Process each attendance record
+      // Track NISN yang sudah dihitung untuk mencegah duplikasi counting
+      Set<String> countedNisns = {};
+
+      // Process each attendance record (hanya hitung setiap NISN sekali)
       for (var attendanceDoc in attendanceSnapshot.docs) {
         Map<String, dynamic> attendanceData =
             attendanceDoc.data() as Map<String, dynamic>;
@@ -196,9 +199,10 @@ class _DashboardScreenState extends State<DashboardPage>
         String nisn = attendanceData['nisn'] ?? '';
         String status = attendanceData['status'] ?? 'alpha';
 
-        // Only count attendance for relevant students
-        if (relevantStudentNisns.contains(nisn)) {
+        // Only count attendance for relevant students dan belum dihitung sebelumnya
+        if (relevantStudentNisns.contains(nisn) && !countedNisns.contains(nisn)) {
           stats[status] = (stats[status] ?? 0) + 1;
+          countedNisns.add(nisn); // Tandai NISN ini sudah dihitung
         }
       }
 

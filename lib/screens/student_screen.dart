@@ -21,7 +21,6 @@ class _StudentScreenState extends State<StudentScreen>
   final TextEditingController _nisnController = TextEditingController();
   final TextEditingController _namaController = TextEditingController();
   final TextEditingController _emailOrangtuaController = TextEditingController();
-  final TextEditingController _telpOrangtuaController = TextEditingController();
 
   String? _selectedGender;
   String? _selectedClass;
@@ -104,6 +103,7 @@ class _StudentScreenState extends State<StudentScreen>
     _scaleController.dispose();
     _nisnController.dispose();
     _namaController.dispose();
+    _emailOrangtuaController.dispose();
     super.dispose();
   }
 
@@ -350,57 +350,6 @@ class _StudentScreenState extends State<StudentScreen>
                                   }
                                   return null;
                                 },
-                              ),
-                              const SizedBox(height: 24),
-
-                              _buildModernTextField(
-                                controller: _telpOrangtuaController,
-                                label: 'Nomor Telepon / WhatsApp',
-                                hint: 'contoh: 081234567890',
-                                icon: Icons.phone_outlined,
-                                keyboardType: TextInputType.phone,
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return 'Nomor telepon tidak boleh kosong';
-                                  }
-                                  // Validasi format telepon Indonesia
-                                  final phoneRegex = RegExp(r'^(08|62)\d{8,11}$');
-                                  if (!phoneRegex.hasMatch(value.trim())) {
-                                    return 'Format nomor telepon tidak valid (gunakan 08xxx atau 62xxx)';
-                                  }
-                                  return null;
-                                },
-                              ),
-
-                              const SizedBox(height: 12),
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFF9E6),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                      color: const Color(0xFFFFE082)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.info_outline,
-                                      color: Color(0xFFFF8F00),
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        'Email dan nomor telepon akan digunakan untuk notifikasi kehadiran siswa.',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.orange[900],
-                                          height: 1.3,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
                               ),
                               const SizedBox(height: 36),
 
@@ -759,7 +708,6 @@ class _StudentScreenState extends State<StudentScreen>
       final String nisn = _nisnController.text.trim();
       final String nama = _namaController.text.trim();
       final String emailOrangtua = _emailOrangtuaController.text.trim();
-      final String telpOrangtua = _telpOrangtuaController.text.trim();
 
       // Validate NISN length
       if (nisn.length != 10) {
@@ -790,7 +738,6 @@ class _StudentScreenState extends State<StudentScreen>
         'kelas_sw': _selectedClass,
         'nip': _walikelasNip, // Add the wali kelas NIP
         'email_orangtua': emailOrangtua, // Add parent email
-        'telp_orangtua': telpOrangtua, // Add parent phone
       });
 
       _showSuccessToast('Data siswa berhasil disimpan!');
@@ -812,7 +759,6 @@ class _StudentScreenState extends State<StudentScreen>
     _nisnController.clear();
     _namaController.clear();
     _emailOrangtuaController.clear();
-    _telpOrangtuaController.clear();
     setState(() {
       _selectedGender = null;
       _selectedClass = null;

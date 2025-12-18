@@ -25,7 +25,7 @@ class AttendanceTimeHelper {
           id: _defaultDocId,
           jamMulai: '06:30',
           jamSelesai: '13:55',
-          aktif: true,
+          aktif: true, // AKTIF - Pembatasan waktu presensi
         );
         
         // Simpan default settings
@@ -111,7 +111,7 @@ class AttendanceTimeHelper {
           id: _defaultDocId,
           jamMulai: '06:30',
           jamSelesai: '13:55',
-          aktif: true,
+          aktif: true, // AKTIF - Pembatasan waktu presensi
         );
       }
     } catch (e) {
@@ -120,7 +120,7 @@ class AttendanceTimeHelper {
         id: _defaultDocId,
         jamMulai: '06:30',
         jamSelesai: '13:55',
-        aktif: true,
+        aktif: true, // AKTIF - Pembatasan waktu presensi
       );
     }
   }

@@ -9,11 +9,10 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:universal_html/html.dart' as html;
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:excel/excel.dart' as excel;
 import 'package:intl/intl.dart';
-import 'package:open_file/open_file.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:media_store_plus/media_store_plus.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final String userEmail;
@@ -751,20 +750,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return true;
   }
 
-  Future<void> _downloadDailyReport() async {
-    // Request permission first
-    if (!await _requestStoragePermission()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Izin penyimpanan diperlukan untuk menyimpan laporan'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return;
-    }
+  Future<String> _saveTempFile(String filename, List<int> bytes) async {
+    final tempDir = await getTemporaryDirectory();
+    final tempFile = File('${tempDir.path}/$filename');
+    await tempFile.writeAsBytes(bytes, flush: true);
+    return tempFile.path;
+  }
 
+  Future<void> _downloadDailyReport() async {
     try {
       setState(() {
         isLoading = true;
@@ -922,16 +915,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         'file_laporan': filename,
       });
 
+      final bytes = excelFile.encode()!;
+
       if (kIsWeb) {
-        // Web platform
-        final bytes = excelFile.encode();
         final blob = html.Blob([bytes]);
         final url = html.Url.createObjectUrlFromBlob(blob);
         html.AnchorElement(href: url)
           ..setAttribute('download', filename)
           ..click();
         html.Url.revokeObjectUrl(url);
-        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -940,238 +932,38 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ),
           );
         }
+      } else if (Platform.isAndroid) {
+        final tempPath = await _saveTempFile(filename, bytes);
+        MediaStore.appFolder = 'SmartPresensee';
+        await MediaStore.ensureInitialized();
+        final mediaStore = MediaStore();
+        await mediaStore.saveFile(
+          tempFilePath: tempPath,
+          dirType: DirType.download,
+          dirName: DirName.download,
+          relativePath: 'SmartPresensee',
+        );
+        Fluttertoast.showToast(
+          msg: '✅ File tersimpan di Download/SmartPresensee',
+          toastLength: Toast.LENGTH_LONG,
+          gravity: ToastGravity.BOTTOM,
+        );
       } else {
-        // Mobile platform - Save to Downloads folder
-        try {
-          String? downloadsPath;
-          
-          if (Platform.isAndroid) {
-            // For Android, try multiple standard Downloads paths
-            final possiblePaths = [
-              '/storage/emulated/0/Download',
-              '/storage/emulated/0/Downloads',
-              '/sdcard/Download',
-              '/sdcard/Downloads',
-            ];
-            
-            // Check which path exists
-            for (final path in possiblePaths) {
-              final dir = Directory(path);
-              if (await dir.exists()) {
-                downloadsPath = path;
-                log('Found existing downloads directory: $downloadsPath');
-                break;
-              }
-            }
-            
-            // If no path exists, use first one and it will be created
-            downloadsPath ??= possiblePaths[0];
-            log('Will use downloads directory: $downloadsPath');
-          } else {
-            // For iOS and other platforms
-            final directory = await getApplicationDocumentsDirectory();
-            downloadsPath = directory.path;
-          }
-
-          final filePath = '$downloadsPath/$filename';
-          final file = File(filePath);
-          
-          log('Attempting to save file to: $filePath');
-          
-          // Ensure directory exists
-          await file.parent.create(recursive: true);
-          log('Directory created/verified: ${file.parent.path}');
-          
-          // Write file
-          final bytes = excelFile.encode()!;
-          await file.writeAsBytes(bytes);
-          log('File written, bytes: ${bytes.length}');
-          
-          // Verify file exists and has content
-          final fileExists = await file.exists();
-          final fileSize = fileExists ? await file.length() : 0;
-          
-          log('File verification - Exists: $fileExists, Size: $fileSize bytes');
-          
-          if (!fileExists || fileSize == 0) {
-            throw Exception('File gagal disimpan atau ukuran file 0 bytes');
-          }
-          
-          // Note: File is saved successfully
-          // To make it visible in File Manager, user may need to:
-          // 1. Refresh the Downloads folder (pull down to refresh)
-          // 2. Restart File Manager app
-          // 3. Or use "Open File" button which works immediately
-          
-          log('✅ File successfully saved to: $filePath');
-          
-          // Show toast notification
-          if (mounted) {
-            Fluttertoast.showToast(
-              msg: "✅ File tersimpan di folder Download",
-              toastLength: Toast.LENGTH_SHORT,
-              gravity: ToastGravity.BOTTOM,
-              backgroundColor: Colors.green,
-              textColor: Colors.white,
-              fontSize: 16.0
-            );
-          }
-            
-            if (mounted) {
-              // Show success dialog with file path and option to open
-              showDialog(
-                context: context,
-                builder: (BuildContext context) {
-                  return AlertDialog(
-                    title: const Row(
-                      children: [
-                        Icon(Icons.check_circle, color: Colors.green, size: 28),
-                        SizedBox(width: 12),
-                        Text('Laporan Berhasil Disimpan'),
-                      ],
-                    ),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'File laporan telah tersimpan di:',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: SelectableText(
-                            filePath,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Ukuran: ${(fileSize / 1024).toStringAsFixed(2)} KB',
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.orange[50],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange[300]!),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange[700]),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'File Mungkin Belum Terlihat',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Jika file tidak muncul di folder Download:\n'
-                                '1. Tekan tombol "Buka File" di bawah (pasti bisa!)\n'
-                                '2. Atau refresh folder Download (geser ke bawah)\n'
-                                '3. Atau restart File Manager\n'
-                                '4. Atau restart HP Anda',
-                                style: TextStyle(fontSize: 11),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Pilih cara membuka file:',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Tutup'),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          Navigator.of(context).pop();
-                          final result = await OpenFile.open(filePath);
-                          log('OpenFile result: ${result.message}');
-                          if (result.type == ResultType.done) {
-                            Fluttertoast.showToast(
-                              msg: "✅ File berhasil dibuka",
-                              toastLength: Toast.LENGTH_SHORT,
-                              gravity: ToastGravity.BOTTOM,
-                              backgroundColor: Colors.green,
-                            );
-                          } else if (result.type == ResultType.noAppToOpen) {
-                            Fluttertoast.showToast(
-                              msg: "⚠️ Tidak ada aplikasi untuk membuka file Excel.\nSilakan install Microsoft Excel, Google Sheets, atau WPS Office",
-                              toastLength: Toast.LENGTH_LONG,
-                              gravity: ToastGravity.CENTER,
-                              backgroundColor: Colors.orange,
-                            );
-                          } else {
-                            Fluttertoast.showToast(
-                              msg: "⚠️ ${result.message}",
-                              toastLength: Toast.LENGTH_SHORT,
-                              gravity: ToastGravity.BOTTOM,
-                              backgroundColor: Colors.red,
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.file_open, size: 18),
-                        label: const Text('Buka File'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4CAF50),
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
-            }
-        } catch (e) {
-          log('Error saving to storage: $e');
-          // Fallback to sharing if direct save fails
-          final directory = await getTemporaryDirectory();
-          final file = File('${directory.path}/$filename');
-          await file.writeAsBytes(excelFile.encode()!);
-          await Share.shareXFiles(
-            [XFile(file.path)],
-            text: 'Laporan Kehadiran ${DateFormat('dd MMMM yyyy').format(selectedDate)}',
-          );
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('File dibagikan karena tidak dapat langsung disimpan ke penyimpanan'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
-        }
+        final dir = await getApplicationDocumentsDirectory();
+        final file = File('${dir.path}/$filename');
+        await file.writeAsBytes(bytes, flush: true);
+        Fluttertoast.showToast(
+          msg: '✅ File tersimpan di Dokumen Aplikasi',
+          toastLength: Toast.LENGTH_LONG,
+        );
       }
     } catch (e) {
       log('Error downloading report: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal mengunduh laporan: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      Fluttertoast.showToast(
+        msg: '❌ Gagal mengunduh laporan: ${e.toString()}',
+        toastLength: Toast.LENGTH_LONG,
+        backgroundColor: Colors.red,
+      );
     } finally {
       setState(() {
         isLoading = false;
@@ -2099,8 +1891,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         TextEditingController(text: student.nisn);
     final TextEditingController emailOrangtuaController =
         TextEditingController();
-    final TextEditingController telpOrangtuaController =
-        TextEditingController();
     String selectedClass = student.kelas;
     String selectedGender = student.jenisKelamin;
 
@@ -2113,7 +1903,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       if (studentDoc.exists) {
         Map<String, dynamic> data = studentDoc.data() as Map<String, dynamic>;
         emailOrangtuaController.text = data['email_orangtua'] ?? '';
-        telpOrangtuaController.text = data['telp_orangtua'] ?? '';
       }
     } catch (e) {
       log('Error loading parent contact: $e');
@@ -2245,19 +2034,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ),
                       keyboardType: TextInputType.emailAddress,
                     ),
-                    const SizedBox(height: 16),
-
-                    // Telepon Orang Tua
-                    TextFormField(
-                      controller: telpOrangtuaController,
-                      decoration: const InputDecoration(
-                        labelText: 'No. Telepon / WhatsApp',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.phone_outlined),
-                        helperText: 'Format: 08xxx atau 62xxx',
-                      ),
-                      keyboardType: TextInputType.phone,
-                    ),
                   ],
                 ),
               ),
@@ -2322,7 +2098,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       'kelas': selectedClass,
                       'jenis_kelamin': selectedGender,
                       'email_orangtua': emailOrangtuaController.text.trim(),
-                      'telp_orangtua': telpOrangtuaController.text.trim(),
                     });
                   },
                   style: ElevatedButton.styleFrom(
@@ -2446,7 +2221,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           'jenis_kelamin': data['jenis_kelamin'],
           'nip': currentNip,
           'email_orangtua': data['email_orangtua'] ?? '',
-          'telp_orangtua': data['telp_orangtua'] ?? '',
         });
 
         // Update attendance records with new NISN
@@ -2490,7 +2264,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           'jenis_kelamin': data['jenis_kelamin'],
           'nip': currentNip,
           'email_orangtua': data['email_orangtua'] ?? '',
-          'telp_orangtua': data['telp_orangtua'] ?? '',
         });
       }
 
@@ -2611,19 +2384,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   }
 
   Future<void> _downloadDailyReport() async {
-    // Request permission first
-    if (!await _requestStoragePermission()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Izin penyimpanan diperlukan untuk menyimpan laporan'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return;
-    }
-
     try {
       setState(() {
         isLoading = true;
@@ -2718,16 +2478,15 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         'file_laporan': filename,
       });
 
+      final bytes = excelFile.encode()!;
+
       if (kIsWeb) {
-        // Web platform
-        final bytes = excelFile.encode();
         final blob = html.Blob([bytes]);
         final url = html.Url.createObjectUrlFromBlob(blob);
         html.AnchorElement(href: url)
           ..setAttribute('download', filename)
           ..click();
         html.Url.revokeObjectUrl(url);
-        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -2736,238 +2495,40 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
             ),
           );
         }
+      } else if (Platform.isAndroid) {
+        final tempDir = await getTemporaryDirectory();
+        final tempFile = File('${tempDir.path}/$filename');
+        await tempFile.writeAsBytes(bytes, flush: true);
+        MediaStore.appFolder = 'SmartPresensee';
+        await MediaStore.ensureInitialized();
+        final mediaStore = MediaStore();
+        await mediaStore.saveFile(
+          tempFilePath: tempFile.path,
+          dirType: DirType.download,
+          dirName: DirName.download,
+          relativePath: 'SmartPresensee',
+        );
+        Fluttertoast.showToast(
+          msg: '✅ File tersimpan di Download/SmartPresensee',
+          toastLength: Toast.LENGTH_LONG,
+          gravity: ToastGravity.BOTTOM,
+        );
       } else {
-        // Mobile platform - Save to Downloads folder
-        try {
-          String? downloadsPath;
-          
-          if (Platform.isAndroid) {
-            // For Android, try multiple standard Downloads paths
-            final possiblePaths = [
-              '/storage/emulated/0/Download',
-              '/storage/emulated/0/Downloads',
-              '/sdcard/Download',
-              '/sdcard/Downloads',
-            ];
-            
-            // Check which path exists
-            for (final path in possiblePaths) {
-              final dir = Directory(path);
-              if (await dir.exists()) {
-                downloadsPath = path;
-                log('Found existing downloads directory: $downloadsPath');
-                break;
-              }
-            }
-            
-            // If no path exists, use first one and it will be created
-            downloadsPath ??= possiblePaths[0];
-            log('Will use downloads directory: $downloadsPath');
-          } else {
-            // For iOS and other platforms
-            final directory = await getApplicationDocumentsDirectory();
-            downloadsPath = directory.path;
-          }
-
-          final filePath = '$downloadsPath/$filename';
-          final file = File(filePath);
-          
-          log('Attempting to save file to: $filePath');
-          
-          // Ensure directory exists
-          await file.parent.create(recursive: true);
-          log('Directory created/verified: ${file.parent.path}');
-          
-          // Write file
-          final bytes = excelFile.encode()!;
-          await file.writeAsBytes(bytes);
-          log('File written, bytes: ${bytes.length}');
-          
-          // Verify file exists and has content
-          final fileExists = await file.exists();
-          final fileSize = fileExists ? await file.length() : 0;
-          
-          log('File verification - Exists: $fileExists, Size: $fileSize bytes');
-          
-          if (!fileExists || fileSize == 0) {
-            throw Exception('File gagal disimpan atau ukuran file 0 bytes');
-          }
-          
-          // Note: File is saved successfully
-          // To make it visible in File Manager, user may need to:
-          // 1. Refresh the Downloads folder (pull down to refresh)
-          // 2. Restart File Manager app
-          // 3. Or use "Open File" button which works immediately
-          
-          log('✅ File successfully saved to: $filePath');
-          
-          // Show toast notification
-          if (mounted) {
-            Fluttertoast.showToast(
-              msg: "✅ File tersimpan di folder Download",
-              toastLength: Toast.LENGTH_SHORT,
-              gravity: ToastGravity.BOTTOM,
-              backgroundColor: Colors.green,
-              textColor: Colors.white,
-              fontSize: 16.0
-            );
-          }
-            
-            if (mounted) {
-              // Show success dialog with file path and option to open
-              showDialog(
-                context: context,
-                builder: (BuildContext context) {
-                  return AlertDialog(
-                    title: const Row(
-                      children: [
-                        Icon(Icons.check_circle, color: Colors.green, size: 28),
-                        SizedBox(width: 12),
-                        Text('Laporan Berhasil Disimpan'),
-                      ],
-                    ),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'File laporan telah tersimpan di:',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: SelectableText(
-                            filePath,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Ukuran: ${(fileSize / 1024).toStringAsFixed(2)} KB',
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.orange[50],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange[300]!),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange[700]),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'File Mungkin Belum Terlihat',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Jika file tidak muncul di folder Download:\n'
-                                '1. Tekan tombol "Buka File" di bawah (pasti bisa!)\n'
-                                '2. Atau refresh folder Download (geser ke bawah)\n'
-                                '3. Atau restart File Manager\n'
-                                '4. Atau restart HP Anda',
-                                style: TextStyle(fontSize: 11),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Pilih cara membuka file:',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Tutup'),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          Navigator.of(context).pop();
-                          final result = await OpenFile.open(filePath);
-                          log('OpenFile result: ${result.message}');
-                          if (result.type == ResultType.done) {
-                            Fluttertoast.showToast(
-                              msg: "✅ File berhasil dibuka",
-                              toastLength: Toast.LENGTH_SHORT,
-                              gravity: ToastGravity.BOTTOM,
-                              backgroundColor: Colors.green,
-                            );
-                          } else if (result.type == ResultType.noAppToOpen) {
-                            Fluttertoast.showToast(
-                              msg: "⚠️ Tidak ada aplikasi untuk membuka file Excel.\nSilakan install Microsoft Excel, Google Sheets, atau WPS Office",
-                              toastLength: Toast.LENGTH_LONG,
-                              gravity: ToastGravity.CENTER,
-                              backgroundColor: Colors.orange,
-                            );
-                          } else {
-                            Fluttertoast.showToast(
-                              msg: "⚠️ ${result.message}",
-                              toastLength: Toast.LENGTH_SHORT,
-                              gravity: ToastGravity.BOTTOM,
-                              backgroundColor: Colors.red,
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.file_open, size: 18),
-                        label: const Text('Buka File'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4CAF50),
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
-            }
-        } catch (e) {
-          log('Error saving to storage: $e');
-          // Fallback to sharing if direct save fails
-          final directory = await getTemporaryDirectory();
-          final file = File('${directory.path}/$filename');
-          await file.writeAsBytes(excelFile.encode()!);
-          await Share.shareXFiles(
-            [XFile(file.path)],
-            text: 'Riwayat Kehadiran ${widget.student.nama}',
-          );
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('File dibagikan karena tidak dapat langsung disimpan ke penyimpanan'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
-        }
+        final dir = await getApplicationDocumentsDirectory();
+        final file = File('${dir.path}/$filename');
+        await file.writeAsBytes(bytes, flush: true);
+        Fluttertoast.showToast(
+          msg: '✅ File tersimpan di Dokumen Aplikasi',
+          toastLength: Toast.LENGTH_LONG,
+        );
       }
     } catch (e) {
       log('Error downloading report: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal mengunduh laporan: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      Fluttertoast.showToast(
+        msg: '❌ Gagal mengunduh laporan: ${e.toString()}',
+        toastLength: Toast.LENGTH_LONG,
+        backgroundColor: Colors.red,
+      );
     } finally {
       setState(() {
         isLoading = false;
@@ -3701,7 +3262,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                           context: context,
                           initialDate: selectedDate,
                           firstDate: DateTime(2020),
-                          lastDate: DateTime.now().add(const Duration(days: 1)),
+                          lastDate: DateTime.now(),
                         );
                         if (picked != null) {
                           setState(() {

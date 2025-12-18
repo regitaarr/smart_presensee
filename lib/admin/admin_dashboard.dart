@@ -329,11 +329,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
               isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
           .get();
 
+      // Gunakan Set untuk tracking NISN yang sudah dihitung (hindari duplikasi)
+      Set<String> countedNisns = {};
       int presentCount = 0;
+      
       for (var doc in todayAttendanceSnapshot.docs) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        if (data['status'] == 'hadir') {
+        String nisn = data['nisn'] ?? '';
+        
+        // Hanya hitung jika status hadir DAN belum pernah dihitung
+        if (data['status'] == 'hadir' && nisn.isNotEmpty && !countedNisns.contains(nisn)) {
           presentCount++;
+          countedNisns.add(nisn);
         }
       }
 

@@ -191,7 +191,7 @@ class _RealtimeCameraViewState extends State<RealtimeCameraView>
     if (_isProcessing) return;
     if (_throttleTimer != null && _throttleTimer!.isActive) return;
 
-    _throttleTimer = Timer(const Duration(milliseconds: 150), () {});
+    _throttleTimer = Timer(const Duration(milliseconds: 100), () {}); // Optimized dari 150ms ke 100ms
     _isProcessing = true;
 
     _imageSize = (_imageRotation == 90 || _imageRotation == 270)
@@ -531,5 +531,3 @@ class _FaceOverlayPainter extends CustomPainter {
     return oldDelegate.faces != faces || oldDelegate.color != color;
   }
 }
-
-

@@ -11,7 +11,10 @@ import 'package:smart_presensee/screens/authenticated_user_screen.dart';
 import 'package:smart_presensee/services/extract_features.dart';
 import 'package:smart_presensee/services/email_service.dart';
 import 'package:smart_presensee/services/attendance_time_helper.dart';
+import 'package:smart_presensee/services/accuracy_tracking_service.dart';
+import 'package:smart_presensee/services/tracking_helper.dart';
 import 'package:smart_presensee/widgets/realtime_camera_view.dart';
+import 'package:smart_presensee/widgets/confidence_score_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_face_api/face_api.dart' as regula;
 import 'package:fluttertoast/fluttertoast.dart';
@@ -35,7 +38,13 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   @override
   void initState() {
     super.initState();
+    print('════════════════════════════════════════════');
+    print('🚀 AUTH SCREEN INITIALIZED');
+    print('════════════════════════════════════════════');
     log('AuthenticateScreen initialized');
+    
+    // Reset flag untuk memastikan state bersih
+    _isProcessingAttendance = false;
 
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 1000),
@@ -60,8 +69,10 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     });
 
     // Realtime mode siap dipakai; muat data wajah terdaftar
+    print('📥 Loading registered faces...');
     _loadRegisteredFaces();
     _canAuthenticate = true; // tampilkan status section
+    print('✅ Can authenticate set to true');
   }
 
   @override
@@ -74,60 +85,69 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     super.dispose();
   }
 
-  // Function to generate attendance ID - SEQUENTIAL VERSION
+  // Function to generate attendance ID - IMPROVED VERSION with race condition prevention
   Future<String> _generateAttendanceId() async {
     try {
       const String prefix = 'idpr04';
+      
+      // Retry mechanism untuk mengatasi race condition
+      for (int attempt = 0; attempt < 5; attempt++) {
+        QuerySnapshot lastRecords = await FirebaseFirestore.instance
+            .collection('presensi')
+            .where('id_presensi', isGreaterThanOrEqualTo: prefix)
+            .where('id_presensi', isLessThan: '${prefix}z')
+            .orderBy('id_presensi', descending: true)
+            .limit(1)
+            .get();
 
-      QuerySnapshot lastRecords = await FirebaseFirestore.instance
-          .collection('presensi')
-          .where('id_presensi', isGreaterThanOrEqualTo: prefix)
-          .where('id_presensi', isLessThan: '${prefix}z')
-          .orderBy('id_presensi', descending: true)
-          .limit(1)
-          .get();
+        int nextNumber = 1;
 
-      int nextNumber = 1;
+        if (lastRecords.docs.isNotEmpty) {
+          String lastId = lastRecords.docs.first.get('id_presensi') as String;
+          log('Last attendance ID found: $lastId');
 
-      if (lastRecords.docs.isNotEmpty) {
-        String lastId = lastRecords.docs.first.get('id_presensi') as String;
-        log('Last attendance ID found: $lastId');
-
-        if (lastId.length >= 10 && lastId.startsWith(prefix)) {
-          String lastNumberStr = lastId.substring(6);
-          int lastNumber = int.tryParse(lastNumberStr) ?? 0;
-          nextNumber = lastNumber + 1;
+          if (lastId.length >= 10 && lastId.startsWith(prefix)) {
+            String lastNumberStr = lastId.substring(6);
+            int lastNumber = int.tryParse(lastNumberStr) ?? 0;
+            nextNumber = lastNumber + 1;
+          }
         }
+
+        String formattedNumber = nextNumber.toString().padLeft(4, '0');
+        String newId = '$prefix$formattedNumber';
+
+        if (newId.length != 10) {
+          throw Exception('Generated ID length is not 10 characters: $newId');
+        }
+
+        // Double check: Pastikan ID belum dipakai
+        DocumentSnapshot existingDoc = await FirebaseFirestore.instance
+            .collection('presensi')
+            .doc(newId)
+            .get();
+
+        if (!existingDoc.exists) {
+          log('Generated unique attendance ID: $newId (attempt ${attempt + 1})');
+          return newId;
+        }
+        
+        log('⚠ ID $newId already exists, retrying... (attempt ${attempt + 1})');
+        // Tunggu sebentar sebelum retry untuk menghindari collision
+        await Future.delayed(Duration(milliseconds: 100 * (attempt + 1)));
       }
-
-      String formattedNumber = nextNumber.toString().padLeft(4, '0');
-      String newId = '$prefix$formattedNumber';
-
-      if (newId.length != 10) {
-        throw Exception('Generated ID length is not 10 characters: $newId');
-      }
-
-      DocumentSnapshot existingDoc = await FirebaseFirestore.instance
-          .collection('presensi')
-          .doc(newId)
-          .get();
-
-      if (existingDoc.exists) {
-        log('ID $newId already exists, trying next number...');
-        nextNumber++;
-        formattedNumber = nextNumber.toString().padLeft(4, '0');
-        newId = '$prefix$formattedNumber';
-      }
-
-      log('Generated attendance ID: $newId');
-      return newId;
+      
+      // Jika semua attempt gagal, gunakan fallback dengan timestamp + random
+      throw Exception('Failed to generate unique ID after 5 attempts');
     } catch (e) {
       log('Error generating attendance ID: $e');
 
+      // Fallback ID dengan timestamp + random number untuk uniqueness
       DateTime now = DateTime.now();
       String timeString =
           '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-      String fallbackId = 'idpr04$timeString';
+      int random = math.Random().nextInt(100);
+      String randomStr = random.toString().padLeft(2, '0');
+      String fallbackId = 'idpr$timeString$randomStr';
 
       log('Using fallback ID: $fallbackId');
       return fallbackId;
@@ -180,14 +200,51 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
           studentName = studentDoc.get('nama_siswa') as String;
         }
 
-        // Show message in popup dialog
+        // Show message in popup dialog - LANGSUNG tanpa guard
         String timeString =
             '${existingTime.hour.toString().padLeft(2, '0')}:${existingTime.minute.toString().padLeft(2, '0')}';
-        _showFailureDialog(
-          title: "Presensi Gagal!",
-          description:
-              "Kamu $studentName sudah melakukan presensi hari ini pada pukul $timeString!",
-        );
+        
+        // Tampilkan dialog langsung tanpa delay dan guard karena ini dipanggil SEBELUM konfirmasi
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                title: const Text(
+                  "Presensi Gagal!",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFFF7043),
+                  ),
+                ),
+                content: Text(
+                  "Kamu $studentName sudah melakukan presensi hari ini pada pukul $timeString!",
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text(
+                      'OK',
+                      style: TextStyle(
+                        color: Color(0xFF2E7D32),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        }
       } else {
         log('No existing attendance found for NISN $nisn today');
       }
@@ -227,12 +284,8 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         return false;
       }
 
-      // Check if student has already attended today
-      bool hasAttendedToday = await _checkTodayAttendance(nisn);
-      if (hasAttendedToday) {
-        log('Attendance already exists for NISN $nisn today');
-        return false;
-      }
+      // NOTE: Pengecekan presensi ganda sudah dilakukan di _onRealtimeFrame() 
+      // sebelum fungsi ini dipanggil untuk menghindari race condition dengan dialog konfirmasi
 
       String attendanceId = await _generateAttendanceId();
 
@@ -487,10 +540,29 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
                     ),
                     // Kamera memenuhi layar di bawah banner tanggal
                     Expanded(
-                      child: RealtimeCameraView(
-                        onFrame: (inputImage, faces) {
-                          _onRealtimeFrame(inputImage, faces);
-                        },
+                      child: Stack(
+                        children: [
+                          // Camera View
+                          RealtimeCameraView(
+                            onFrame: (inputImage, faces) {
+                              _onRealtimeFrame(inputImage, faces);
+                            },
+                          ),
+                          
+                          // Simple Confidence Score Indicator (hanya angka dengan warna)
+                          if (_currentConfidenceScore != null && !_inConfirmation)
+                            Positioned(
+                              top: 16,
+                              left: 0,
+                              right: 0,
+                              child: Center(
+                                child: ConfidenceScoreIndicator(
+                                  confidenceScore: _currentConfidenceScore,
+                                  isVisible: true,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -533,15 +605,16 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   double? computeSimilarityScore(FaceFeatures faceA, FaceFeatures faceB) {
     final List<double> diffs = [];
     
-    // Validasi: pastikan minimal ada 4 landmark yang terdeteksi
+    // Validasi: pastikan minimal ada landmark yang terdeteksi
     int validLandmarks = 0;
     if (faceA.rightEye?.x != null && faceA.leftEye?.x != null) validLandmarks++;
     if (faceA.rightMouth?.x != null && faceA.leftMouth?.x != null) validLandmarks++;
     if (faceA.noseBase?.x != null) validLandmarks++;
     if (faceA.rightCheek?.x != null && faceA.leftCheek?.x != null) validLandmarks++;
     
+    // Minimal 3 landmark untuk perbandingan yang seimbang
     if (validLandmarks < 3) {
-      log('Insufficient landmarks detected: $validLandmarks', name: 'FaceMatch');
+      log('Insufficient landmarks detected: $validLandmarks (minimum: 3)', name: 'FaceMatch');
       return null;
     }
 
@@ -620,8 +693,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
       diffs.add(((earA / earB) - 1.0).abs());
     }
 
-    if (diffs.isEmpty || diffs.length < 3) {
-      log('Insufficient face metrics: ${diffs.length}', name: 'FaceMatch');
+    // Minimal 4 metrik wajah untuk perbandingan yang seimbang
+    if (diffs.isEmpty || diffs.length < 4) {
+      log('Insufficient face metrics: ${diffs.length} (minimum: 4)', name: 'FaceMatch');
       return null;
     }
     
@@ -634,108 +708,431 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   bool _isLoadingUsers = false;
   DateTime? _lastMatchAttempt;
   bool _hasCompletedAttendance = false;
+  
+  // Confidence score & accuracy tracking
+  double? _currentConfidenceScore;
+  String _currentLightingCondition = 'normal';
+  String _currentFaceDetectionMode = 'fast';
 
   Future<void> _loadRegisteredFaces() async {
-    if (_isLoadingUsers) return;
+    if (_isLoadingUsers) {
+      print('⏭️ Already loading users, skipping...');
+      return;
+    }
+    
+    print('════════════════════════════════════════════');
+    print('📂 LOADING REGISTERED FACES');
+    print('════════════════════════════════════════════');
+    
     setState(() {
       _isLoadingUsers = true;
     });
     try {
+      log('🔄 Loading registered faces from Firestore...', name: 'LoadFaces');
+      print('🔄 Fetching from Firestore collection: wajah_siswa');
+      
       final snap = await FirebaseFirestore.instance.collection('wajah_siswa').get();
+      print('📦 Found ${snap.docs.length} documents in wajah_siswa');
+      log('📦 Found ${snap.docs.length} documents in wajah_siswa collection', name: 'LoadFaces');
+      
       _registeredUsers.clear();
+      int validCount = 0;
+      
       for (var doc in snap.docs) {
-        final user = UserModel.fromJson(doc.data());
-        if (user.faceFeatures != null && user.nisn != null) {
-          _registeredUsers.add(user);
+        try {
+          final user = UserModel.fromJson(doc.data());
+          if (user.faceFeatures != null && user.nisn != null) {
+            _registeredUsers.add(user);
+            validCount++;
+            print('  ✓ Added user: NISN ${user.nisn}');
+          } else {
+            print('  ✗ Skipped: NISN ${user.nisn ?? 'null'} - Missing data');
+          }
+        } catch (e) {
+          print('  ⚠️ Error parsing user: $e');
+          log('⚠️ Error parsing user: $e', name: 'LoadFaces');
         }
       }
-      log('Loaded registered faces: ${_registeredUsers.length}');
+      
+      print('════════════════════════════════════════════');
+      print('✅ ✅ ✅ LOADED $validCount REGISTERED FACES');
+      print('════════════════════════════════════════════');
+      log('✅ ✅ ✅ Loaded $validCount valid registered faces!', name: 'LoadFaces');
+      
+      if (_registeredUsers.isEmpty) {
+        print('❌ WARNING: NO VALID FACE DATA!');
+        log('❌ WARNING: No valid face data found!', name: 'LoadFaces');
+        showToast('Tidak ada wajah terdaftar di database. Silakan daftarkan wajah terlebih dahulu.', isError: true);
+      }
     } catch (e) {
-      log('Error loading registered faces: $e');
+      print('❌ ERROR loading faces: $e');
+      log('❌ Error loading registered faces: $e', name: 'LoadFaces');
+      showToast('Gagal memuat data wajah', isError: true);
     } finally {
       if (mounted) {
         setState(() {
           _isLoadingUsers = false;
         });
       }
+      print('🏁 Load faces completed');
     }
   }
 
-  void _onRealtimeFrame(InputImage inputImage, List<Face> faces) async {
+  Future<void> _onRealtimeFrame(InputImage inputImage, List<Face> faces) async {
     if (!mounted) return;
     if (_hasCompletedAttendance) return;
     if (_inConfirmation) return;
-    if (faces.isEmpty) return;
+    
+    // Reset stabilization jika tidak ada wajah
+    if (faces.isEmpty) {
+      if (_lastDetectedTrackingId != null || _stableFrameCount > 0) {
+        setState(() {
+          _lastDetectedTrackingId = null;
+          _stableFrameCount = 0;
+        });
+        print('🔄 Reset: No face detected');
+      }
+      return;
+    }
+    
+    // Print untuk debug - wajah terdeteksi
+    if (_stableFrameCount == 0) {
+      print('👤 Face detected! trackingId: ${faces.first.trackingId}');
+    }
 
     final now = DateTime.now();
     if (_lastMatchAttempt != null &&
-        now.difference(_lastMatchAttempt!).inMilliseconds < 500) {
-      return; // throttle
+        now.difference(_lastMatchAttempt!).inMilliseconds < 200) {
+      return; // throttle - dikurangi dari 500ms ke 200ms untuk response lebih cepat
     }
     _lastMatchAttempt = now;
 
     if (_registeredUsers.isEmpty && !_isLoadingUsers) {
+      log('⚠️ No registered users in memory, loading...', name: 'AutoPresensi');
       await _loadRegisteredFaces();
-      if (_registeredUsers.isEmpty) return;
+      if (_registeredUsers.isEmpty) {
+        log('❌ Cannot proceed - no registered faces found!', name: 'AutoPresensi');
+        return;
+      }
+      log('✅ Loaded ${_registeredUsers.length} users, ready to match!', name: 'AutoPresensi');
     }
 
-    setState(() => isMatching = true);
+    // ===== STABILIZATION LOGIC =====
+    // Ambil trackingId dari wajah pertama
+    final Face detectedFace = faces.first;
+    final int? currentTrackingId = detectedFace.trackingId;
+    
+    // Check stabilization dengan atau tanpa tracking ID
+    if (currentTrackingId != null) {
+      // CASE 1: Ada tracking ID - gunakan tracking ID untuk stabilisasi
+      if (_lastDetectedTrackingId == currentTrackingId) {
+        // Tracking ID sama, increment counter
+        _stableFrameCount++;
+        print('🎯 Stable: $_stableFrameCount/$REQUIRED_STABLE_FRAMES (ID: $currentTrackingId)');
+        log('🎯 Stable frame count: $_stableFrameCount/$REQUIRED_STABLE_FRAMES (ID: $currentTrackingId)', name: 'Stabilization');
+      } else {
+        // Tracking ID berubah, reset counter
+        print('🔄 ID changed: $_lastDetectedTrackingId → $currentTrackingId (reset)');
+        log('🔄 Tracking ID changed: $_lastDetectedTrackingId → $currentTrackingId, resetting counter', name: 'Stabilization');
+        setState(() {
+          _lastDetectedTrackingId = currentTrackingId;
+          _stableFrameCount = 1;
+        });
+        return; // Tunggu stabilization
+      }
+    } else {
+      // CASE 2: Tidak ada tracking ID - gunakan frame count sederhana
+      print('⚠️ No tracking ID from ML Kit - using simple frame count');
+      log('⚠️ No tracking ID from ML Kit, using simple stabilization', name: 'Stabilization');
+      
+      // Increment frame count setiap kali wajah terdeteksi (tanpa tracking ID)
+      _stableFrameCount++;
+      print('🎯 Stable (no ID): $_stableFrameCount/$REQUIRED_STABLE_FRAMES');
+      log('🎯 Stable frame count (no tracking): $_stableFrameCount/$REQUIRED_STABLE_FRAMES', name: 'Stabilization');
+      
+      // Set tracking ID ke -1 sebagai marker bahwa kita menggunakan simple count
+      if (_lastDetectedTrackingId != -1) {
+        setState(() {
+          _lastDetectedTrackingId = -1;
+        });
+      }
+    }
+
+    // Jika belum stabil (belum 3 frame berturut-turut), tunggu
+    if (_stableFrameCount < REQUIRED_STABLE_FRAMES) {
+      return;
+    }
+
+    // ===== WAJAH SUDAH STABIL, PROSES AUTO-MATCHING =====
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', name: 'AutoPresensi');
+    log('✅ ✅ ✅ FACE STABILIZED! Starting auto-match...', name: 'AutoPresensi');
+    log('📊 Total registered users: ${_registeredUsers.length}', name: 'AutoPresensi');
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', name: 'AutoPresensi');
+    
+    // GUARD: Cegah multiple processing, konfirmasi berlangsung, atau sudah selesai
+    if (_isAutoProcessing || _inConfirmation || _hasCompletedAttendance) {
+      log('⚠️ Skipping: processing=$_isAutoProcessing, confirmation=$_inConfirmation, completed=$_hasCompletedAttendance', name: 'AutoPresensi');
+      return;
+    }
+    
+    // 🕐 CEK WAKTU PRESENSI TERLEBIH DAHULU (SEBELUM MATCHING)
+    Map<String, dynamic> timeCheck = await AttendanceTimeHelper.checkAttendanceTime();
+    if (timeCheck['allowed'] == false) {
+      log('⏰ Attendance not allowed at this time: ${timeCheck['message']}', name: 'TimeCheck');
+      
+      // Tampilkan notifikasi waktu tidak valid
+      _showFailureDialog(
+        title: "Waktu Presensi Tidak Valid",
+        description: timeCheck['message'] ?? 'Presensi hanya dapat dilakukan pada waktu yang ditentukan.',
+      );
+      
+      // Reset stabilization untuk mencoba lagi nanti
+      setState(() {
+        _lastDetectedTrackingId = null;
+        _stableFrameCount = 0;
+      });
+      return;
+    }
+    log('✅ Time check passed: Attendance allowed', name: 'TimeCheck');
+
+    setState(() {
+      isMatching = true;
+      _isAutoProcessing = true;
+    });
+    
     try {
-      // Gunakan hasil deteksi cepat dari onFrame (faces) jika tersedia untuk
-      // menghindari pemrosesan ulang ML Kit yang mahal.
+      final startTime = DateTime.now();
+      
+      // Ekstraksi fitur wajah - OPTIMIZED
       FaceFeatures? features;
       if (faces.isNotEmpty) {
+        // Gunakan ekstraksi cepat dari Face object yang sudah ada
         features = extractFaceFeaturesFromFace(faces.first);
+        log('⚡ Fast feature extraction from detected face', name: 'Performance');
       }
-      features ??=
-          await extractFaceFeatures(inputImage, FaceDetectorSingleton().faceDetector);
+      
+      // Fallback ke ekstraksi penuh jika gagal (lebih lambat)
       if (features == null) {
-        setState(() => isMatching = false);
+        log('⚠️ Fallback to full feature extraction', name: 'Performance');
+        features = await extractFaceFeatures(inputImage, FaceDetectorSingleton().faceDetector);
+      }
+      
+      // GUARD: Cek lagi setelah async operation (ekstraksi fitur)
+      if (_inConfirmation || _hasCompletedAttendance) {
+        log('⚠️ ABORT: confirmation/completion started during feature extraction', name: 'AutoPresensi');
+        setState(() {
+          isMatching = false;
+          _isAutoProcessing = false;
+        });
+        return;
+      }
+      
+      if (features == null) {
+        log('❌ ❌ ❌ FEATURE EXTRACTION FAILED!', name: 'Performance');
+        setState(() {
+          isMatching = false;
+          _isAutoProcessing = false;
+        });
+        showToast('Gagal mengekstrak fitur wajah', isError: true);
         return;
       }
 
+      final extractionTime = DateTime.now().difference(startTime).inMilliseconds;
+      log('✅ Feature extraction SUCCESS: ${extractionTime}ms', name: 'Performance');
+
       double bestScore = double.infinity; // semakin kecil semakin mirip
       UserModel? bestUser;
-      int validComparisonCount = 0; // Hitung berapa banyak perbandingan valid
+      int validComparisonCount = 0;
+      
+      // Threshold untuk perfect match (early exit optimization)
+      const double perfectMatchThreshold = 0.065; // Sedikit lebih longgar untuk match yang baik
 
+      // Bandingkan dengan semua wajah terdaftar - OPTIMIZED dengan early exit
+      final matchStartTime = DateTime.now();
       for (final user in _registeredUsers) {
         try {
           final stored = user.faceFeatures!;
           final score = computeSimilarityScore(features, stored);
           if (score != null) {
             validComparisonCount++;
-            log('Comparing with NISN ${user.nisn}: score = ${score.toStringAsFixed(4)}', name: 'FaceMatch');
+            
             if (score < bestScore) {
               bestScore = score;
               bestUser = user;
+              
+              // EARLY EXIT: Jika match sangat sempurna, langsung keluar dari loop
+              if (score < perfectMatchThreshold) {
+                log('🎯 Perfect match found! Score: ${score.toStringAsFixed(4)} for NISN: ${user.nisn}', name: 'FaceMatch');
+                break; // Exit loop, tidak perlu cek user lainnya
+              }
             }
           }
         } catch (e) {
           log('Error comparing with user ${user.nisn}: $e', name: 'FaceMatch');
-          // skip jika data tidak lengkap
         }
       }
+      
+      final matchTime = DateTime.now().difference(matchStartTime).inMilliseconds;
+      log('✓ Face matching: ${matchTime}ms (${validComparisonCount} users checked)', name: 'Performance');
 
       log('Best match: ${bestUser?.nisn ?? "none"} with score: ${bestScore.toStringAsFixed(4)} (from $validComparisonCount comparisons)', name: 'FaceMatch');
 
-      // Ambang batas SANGAT KETAT untuk mencegah false positive
-      // Threshold 0.055 = sangat sangat ketat, hanya wajah identik yang diterima
-      const double strictThreshold = 0.055;
+      // Calculate confidence score from geometric similarity
+      final totalResponseTime = DateTime.now().difference(startTime).inMilliseconds;
+      final confidenceScore = TrackingHelper.convertGeometricScoreToConfidence(bestScore);
+      
+      // Update UI dengan confidence score
+      setState(() {
+        _currentConfidenceScore = confidenceScore;
+      });
+
+      // GUARD: Cek lagi setelah loop matching selesai (sebelum keputusan)
+      if (_inConfirmation || _hasCompletedAttendance) {
+        log('⚠️ ABORT: confirmation/completion started during matching process', name: 'AutoPresensi');
+        setState(() {
+          isMatching = false;
+          _isAutoProcessing = false;
+        });
+        return;
+      }
+
+      // Threshold SEIMBANG - disesuaikan untuk deteksi lebih baik
+      // Nilai optimal: cukup longgar untuk mengenali wajah terdaftar, tapi masih akurat
+      const double strictThreshold = 0.11; // Sedikit lebih longgar untuk recognition lebih baik
       
       if (bestUser != null && bestScore < strictThreshold) {
-        log('✓ Face matched! Score: ${bestScore.toStringAsFixed(4)} for NISN: ${bestUser.nisn}', name: 'FaceMatch');
-        _startConfirmation(bestUser);
-      } else if (bestUser != null && bestScore < 0.12) {
-        log('✗ Face similarity too low: ${bestScore.toStringAsFixed(4)} (threshold: $strictThreshold) - REJECTED', name: 'FaceMatch');
+        // ===== WAJAH COCOK - CEK PRESENSI GANDA DULU =====
+        log('✅ ✅ ✅ MATCH FOUND! Score: ${bestScore.toStringAsFixed(4)} < $strictThreshold for NISN: ${bestUser.nisn}', name: 'FaceMatch');
+        
+        // CEK PRESENSI GANDA SEBELUM LANJUT KE KONFIRMASI
+        if (bestUser.nisn != null && bestUser.nisn!.trim().isNotEmpty) {
+          log('🔍 Checking duplicate attendance for NISN: ${bestUser.nisn}', name: 'FaceMatch');
+          bool hasAttendedToday = await _checkTodayAttendance(bestUser.nisn!.trim());
+          if (hasAttendedToday) {
+            log('⚠️ Duplicate attendance detected! Aborting...', name: 'FaceMatch');
+            setState(() {
+              isMatching = false;
+              _isAutoProcessing = false;
+              _lastDetectedTrackingId = null;
+              _stableFrameCount = 0;
+            });
+            return; // Stop proses, notifikasi sudah ditampilkan di _checkTodayAttendance
+          }
+        }
+        
+        // Check cooldown untuk sukses
+        if (_lastSuccessNotificationTime != null) {
+          final timeSinceLastSuccess = now.difference(_lastSuccessNotificationTime!).inSeconds;
+          if (timeSinceLastSuccess < SUCCESS_COOLDOWN_SECONDS) {
+            log('⏳ Success cooldown active (${SUCCESS_COOLDOWN_SECONDS - timeSinceLastSuccess}s remaining)', name: 'AutoPresensi');
+            setState(() {
+              isMatching = false;
+              _isAutoProcessing = false;
+            });
+            return;
+          }
+        }
+        
+        log('🎯 Proceeding to confirmation...', name: 'FaceMatch');
+        _lastSuccessNotificationTime = now;
+        
+        // Log SUCCESS metrics (hanya data teknis, tanpa identitas pengguna)
+        AccuracyTrackingService.logSuccessAttempt(
+          nisn: bestUser.nisn ?? 'unknown',
+          confidenceScore: confidenceScore,
+          responseTimeMs: totalResponseTime,
+          lightingCondition: _currentLightingCondition,
+          faceDetectionMode: _currentFaceDetectionMode,
+          matchScore: bestScore,
+          recognitionMode: 'auto',
+          attemptNumber: 1,
+        );
+        log('📊 Success metrics logged: confidence=${confidenceScore.toStringAsFixed(1)}%, responseTime=${totalResponseTime}ms', name: 'AccuracyTracking');
+        
+        // SET FLAG SEGERA TANPA MENUNGGU setState (KUNCI UTAMA!)
+        // Ini adalah synchronous operation yang langsung block proses lain
+        _inConfirmation = true; // Set LANGSUNG untuk block dialog gagal IMMEDIATELY
+        
+        // Kemudian setState untuk UI update
+        setState(() {
+          _lastDetectedTrackingId = null;
+          _stableFrameCount = 0;
+          isMatching = false;
+          _isAutoProcessing = false;
+        });
+        
+        // Start konfirmasi
+        await _startConfirmation(bestUser);
+        log('📝 Confirmation started', name: 'FaceMatch');
       } else {
-        log('✗ No matching face found. Best score: ${bestScore.toStringAsFixed(4)}', name: 'FaceMatch');
+        // ===== WAJAH TIDAK COCOK - TAMPILKAN NOTIFIKASI =====
+        // GUARD: Cek sekali lagi untuk memastikan tidak sedang konfirmasi
+        if (_inConfirmation || _hasCompletedAttendance) {
+          log('⚠️ Skipping failure notification: confirmation/completion active', name: 'FaceMatch');
+          setState(() {
+            isMatching = false;
+            _isAutoProcessing = false;
+          });
+          return;
+        }
+        
+        if (bestUser != null) {
+          log('✗ Face similarity too low: ${bestScore.toStringAsFixed(4)} >= $strictThreshold (Best match: NISN ${bestUser.nisn})', name: 'FaceMatch');
+        } else {
+          log('✗ No matching face found. No valid users to compare.', name: 'FaceMatch');
+        }
+        
+        // Tampilkan dialog gagal dengan guard ketat dan cooldown
+        if (_lastFailureDialogTime != null) {
+          final timeSinceLastFailure = now.difference(_lastFailureDialogTime!).inSeconds;
+          if (timeSinceLastFailure < 8) { // 8 detik cooldown untuk menghindari spam
+            log('⏳ Failure dialog cooldown active', name: 'AutoPresensi');
+            setState(() {
+              isMatching = false;
+              _isAutoProcessing = false;
+            });
+            return;
+          }
+        }
+        
+        // Set waktu untuk cooldown
+        _lastFailureDialogTime = now;
+        
+        // Failure TIDAK di-log (by design: hanya success yang tercatat)
+        log('⚠️ Face matching failed but not logged to metrics', name: 'AccuracyTracking');
+        
+        // Tampilkan dialog popup untuk wajah tidak cocok
+        if (bestUser != null) {
+          _showFailureDialog(
+            title: "Presensi Gagal!",
+            description: "Wajah tidak cocok dengan yang ada di database. Silahkan coba kembali!",
+          );
+        } else {
+          _showFailureDialog(
+            title: "Wajah Tidak Terdaftar",
+            description: "Wajah tidak ditemukan di database. Pastikan wajah Anda sudah terdaftar!",
+          );
+        }
+        
+        // Reset confidence indicator
+        setState(() {
+          _lastDetectedTrackingId = null;
+          _stableFrameCount = 0;
+          _currentConfidenceScore = null;
+        });
       }
     } catch (e) {
       log('Realtime match error: $e');
     } finally {
-      if (mounted) setState(() => isMatching = false);
+      if (mounted) {
+        setState(() {
+          isMatching = false;
+          _isAutoProcessing = false;
+        });
+      }
     }
   }
+
 
   // Konfirmasi otomatis sebelum menyimpan
   UserModel? _candidateMatch;
@@ -745,10 +1142,17 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   bool _inConfirmation = false;
 
   Future<void> _startConfirmation(UserModel bestUser) async {
-    if (_inConfirmation || _hasCompletedAttendance) return;
+    // Note: _inConfirmation sudah di-set TRUE sebelum fungsi ini dipanggil
+    // Hanya cek jika sudah completed
+    if (_hasCompletedAttendance) {
+      log('⚠️ Skipping confirmation: already completed attendance', name: 'Confirmation');
+      return;
+    }
+    
+    log('✅ Starting confirmation for NISN: ${bestUser.nisn}', name: 'Confirmation');
     setState(() {
       _candidateMatch = bestUser;
-      _inConfirmation = true;
+      // _inConfirmation sudah TRUE, tidak perlu set lagi
       _countdown = 3;
     });
 
@@ -895,9 +1299,9 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
         var response = regula.MatchFacesResponse.fromJson(json.decode(value));
         
-        // Threshold dinaikkan ke 0.85 (dari 0.75) untuk mengurangi false positive
+        // Threshold seimbang untuk menghindari false positive namun tetap bisa mengenali wajah terdaftar
         dynamic str = await regula.FaceSDK.matchFacesSimilarityThresholdSplit(
-            jsonEncode(response!.results), 0.85);
+            jsonEncode(response!.results), 0.75);
 
         var split = regula.MatchFacesSimilarityThresholdSplit.fromJson(
             json.decode(str));
@@ -911,12 +1315,21 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
             bestMatch = user.first as UserModel;
           }
 
-          // Threshold dinaikkan ke 92% (dari 85%) untuk mencegah false positive
-          // Hanya wajah yang sangat mirip yang akan diterima
-          if (similarity > 92.00) {
+          // Threshold seimbang: cukup tinggi untuk akurasi tapi tidak terlalu ketat
+          // 88% adalah nilai optimal untuk mengenali wajah terdaftar sambil menghindari false positive
+          if (similarity > 88.00) {
             faceMatched = true;
             loggingUser = user.first;
             log('✓ Face matched for NISN: ${loggingUser?.nisn} with similarity: $similarity%');
+
+            // Guard: Cek apakah sedang memproses attendance untuk mencegah duplikasi
+            if (_isProcessingAttendance) {
+              log('⚠ Already processing attendance, skipping duplicate save');
+              break;
+            }
+
+            // Set flag untuk mencegah save ganda
+            _isProcessingAttendance = true;
 
             // Save attendance for the matched user
             log('Attempting to save attendance record...');
@@ -925,6 +1338,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
             setState(() {
               trialNumber = 1;
               isMatching = false;
+              _isProcessingAttendance = false; // Reset flag setelah selesai
             });
 
             if (attendanceSaved) {
@@ -949,7 +1363,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
             }
             break;
           } else {
-            log('✗ Face similarity too low: $similarity% (threshold: 92%) for NISN: ${(user.first as UserModel).nisn}');
+            log('✗ Face similarity too low: $similarity% (threshold: 88%) for NISN: ${(user.first as UserModel).nisn}');
           }
         }
       } catch (e) {
@@ -1099,54 +1513,73 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
   void _showFailureDialog(
       {required String title, required String description}) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Color(0xFFFF7043),
+    // GUARD TERAKHIR: Jangan tampilkan dialog jika sedang konfirmasi atau sudah selesai
+    if (_inConfirmation || _hasCompletedAttendance) {
+      log('⚠️ BLOCKED: Dialog gagal dicegah karena konfirmasi aktif', name: 'FailureDialog');
+      return;
+    }
+    
+    // Delay kecil untuk memastikan flag _inConfirmation sudah ter-update dari proses paralel
+    // Gunakan Future.delayed untuk memberi waktu propagasi flag
+    Future.delayed(const Duration(milliseconds: 100), () {
+      // CEK LAGI setelah delay
+      if (_inConfirmation || _hasCompletedAttendance) {
+        log('⚠️ BLOCKED: Dialog gagal dicegah setelah delay check', name: 'FailureDialog');
+        return;
+      }
+      
+      if (!mounted) return; // Pastikan widget masih mounted
+      
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
             ),
-          ),
-          content: Text(
-            description,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Color(0xFF6B7280),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Navigasi ke halaman AuthenticateScreen (halaman presensi/foto ulang)
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (context) => const AuthenticateScreen(),
-                  ),
-                );
-              },
-              child: const Text(
-                'OK',
-                style: TextStyle(
-                  color: Color(0xFF2E7D32), // hijau, bukan merah
-                  fontWeight: FontWeight.bold,
-                ),
+            title: Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFFF7043),
               ),
             ),
-          ],
-        );
-      },
-    );
+            content: Text(
+              description,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  // Navigasi ke halaman AuthenticateScreen (halaman presensi/foto ulang)
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (context) => const AuthenticateScreen(),
+                    ),
+                  );
+                },
+                child: const Text(
+                  'OK',
+                  style: TextStyle(
+                    color: Color(0xFF2E7D32), // hijau, bukan merah
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }); // Tutup Future.delayed
   }
 
   Widget _buildActionSection() {
     if (_canAuthenticate) {
+      // Tampilkan konfirmasi jika wajah cocok
       if (_inConfirmation) {
         return Container(
           padding: const EdgeInsets.all(10),
@@ -1206,120 +1639,253 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         );
       }
 
-      return isMatching
-          ? Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF81C784).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: CircularProgressIndicator(
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Color(0xFF81C784)),
-                          strokeWidth: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Memproses wajah...',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF374151),
-                          ),
-                        ),
-                        SizedBox(height: 1),
-                        Text(
-                          'Harap tunggu sebentar',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Color(0xFF6B7280),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : Container(
-              width: double.infinity,
-              height: 40,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFFFF8A65),
-                    Color(0xFFFF7043),
-                  ],
+      // Tampilkan progress stabilization jika wajah terdeteksi tapi belum stabil
+      if (_stableFrameCount > 0 && _stableFrameCount < REQUIRED_STABLE_FRAMES) {
+        double progress = _stableFrameCount / REQUIRED_STABLE_FRAMES;
+        return Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF3E0),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFFFB74D)),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  value: progress,
+                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF9800)),
+                  backgroundColor: const Color(0xFFFFE0B2),
+                  strokeWidth: 3,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFF8A65).withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
               ),
-              child: ElevatedButton(
-                onPressed: () {
-                  setState(() => isMatching = true);
-                  _fetchUsersAndMatchFace();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.face_retouching_natural,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                    SizedBox(width: 6),
-                    Text(
-                      "Lakukan Presensi",
+                    const Text(
+                      'Stabilisasi wajah...',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
+                        color: Color(0xFFE65100),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Tahan posisi wajah ($_stableFrameCount/$REQUIRED_STABLE_FRAMES)',
+                      style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF9800).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${(_stableFrameCount / REQUIRED_STABLE_FRAMES * 100).toInt()}%',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFE65100),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      // Tampilkan loading saat memproses wajah
+      if (isMatching) {
+        return Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF81C784).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Color(0xFF81C784)),
+                      strokeWidth: 2,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Memproses wajah...',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                    SizedBox(height: 1),
+                    Text(
+                      'Mencocokkan dengan database',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: Color(0xFF6B7280),
                       ),
                     ),
                   ],
                 ),
               ),
-            );
-    } else {
-      return const SizedBox.shrink();
+            ],
+          ),
+        );
+      }
+
+      // Status idle - auto-detection aktif
+      return Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F2FD),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF64B5F6)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2196F3).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(Icons.visibility, color: Color(0xFF1976D2), size: 18),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Mode Auto-Presensi',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1565C0),
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Arahkan wajah ke kamera untuk presensi otomatis',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF546E7A)),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4CAF50),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.sensors, color: Colors.white, size: 14),
+                  SizedBox(width: 4),
+                  Text(
+                    'AKTIF',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
     }
+
+    // Fallback jika _canAuthenticate false
+    return Container(
+      width: double.infinity,
+      height: 40,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFFF8A65),
+            Color(0xFFFF7043),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF8A65).withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: () {
+          setState(() => isMatching = true);
+          _fetchUsersAndMatchFace();
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.face_retouching_natural,
+              color: Colors.white,
+              size: 16,
+            ),
+            SizedBox(width: 6),
+            Text(
+              "Lakukan Presensi",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildPetunjukPresensi() {
@@ -1391,6 +1957,16 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   UserModel? loggingUser;
   bool isMatching = false;
   int trialNumber = 1;
+  bool _isProcessingAttendance = false; // Flag untuk mencegah duplikasi save
+  
+  // Real-time auto-presensi variables
+  int? _lastDetectedTrackingId;
+  int _stableFrameCount = 0;
+  DateTime? _lastSuccessNotificationTime;
+  DateTime? _lastFailureDialogTime;
+  static const int REQUIRED_STABLE_FRAMES = 3; // 3 frame berturut-turut (optimasi dari 5)
+  static const int SUCCESS_COOLDOWN_SECONDS = 5; // Cooldown untuk notifikasi sukses
+  bool _isAutoProcessing = false; // Flag untuk mencegah multiple auto-process
 }
 
 // Tambahkan singleton untuk FaceDetector
