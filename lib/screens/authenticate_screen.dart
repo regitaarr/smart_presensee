@@ -12,7 +12,6 @@ import 'package:smart_presensee/services/extract_features.dart';
 import 'package:smart_presensee/services/email_service.dart';
 import 'package:smart_presensee/services/attendance_time_helper.dart';
 import 'package:smart_presensee/services/accuracy_tracking_service.dart';
-import 'package:smart_presensee/services/tracking_helper.dart';
 import 'package:smart_presensee/widgets/realtime_camera_view.dart';
 import 'package:smart_presensee/widgets/confidence_score_indicator.dart';
 import 'package:flutter/material.dart';
@@ -725,6 +724,12 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
     log('Score: ${score.toStringAsFixed(4)} (${diffs.length} metrics)', name: 'SimilarityScore');
     return score;
   }
+
+  double _calculateAccuracy(double distance) {
+    // Semakin kecil distance semakin baik; normalisasi terhadap FACE_THRESHOLD
+    final accuracy = (1 - (distance / FACE_THRESHOLD)) * 100;
+    return accuracy.clamp(0, 100);
+  }
   // Realtime matching state & logic
   final List<UserModel> _registeredUsers = [];
   bool _isLoadingUsers = false;
@@ -737,6 +742,8 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
   String _currentFaceDetectionMode = 'fast';
   DateTime _sessionStartTime = DateTime.now();
   static const int _minFailDelayMs = 800; // tunda notif gagal minimal 0.8 detik sejak kamera aktif
+  static const double FACE_THRESHOLD = 1.0; // ambang jarak wajah
+  static const double MIN_ACCURACY = 60.0; // minimal akurasi agar dianggap cocok
   String? _lastCandidateNisn; // konsistensi kandidat agar tidak lompat antar user
   int _consistentMatchCount = 0;
   static const int _minConsistentMatches = 2; // butuh match konsisten berturut-turut sebelum konfirmasi
@@ -1008,7 +1015,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
       // Calculate confidence score from geometric similarity
       final totalResponseTime = DateTime.now().difference(startTime).inMilliseconds;
-      final confidenceScore = TrackingHelper.convertGeometricScoreToConfidence(bestScore);
+      final confidenceScore = _calculateAccuracy(bestScore); // gunakan akurasi berbasis threshold
       
       // Update UI dengan confidence score
       setState(() {
@@ -1025,11 +1032,8 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         return;
       }
 
-      // Threshold SEIMBANG - disesuaikan untuk deteksi lebih baik
-      // Nilai optimal: cukup longgar untuk mengenali wajah terdaftar, tapi masih akurat
-      const double strictThreshold = 0.11; // Sedikit lebih longgar untuk recognition lebih baik
-      
-      if (bestUser != null && bestScore < strictThreshold) {
+      // Keputusan akhir: butuh jarak < FACE_THRESHOLD dan accuracy >= MIN_ACCURACY
+      if (bestUser != null && bestScore < FACE_THRESHOLD && confidenceScore >= MIN_ACCURACY) {
         // Cek konsistensi kandidat agar tidak lompat user antar frame
         if (_lastCandidateNisn == bestUser.nisn) {
           _consistentMatchCount++;
@@ -1051,7 +1055,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         _lastCandidateNisn = null;
 
         // ===== WAJAH COCOK - CEK PRESENSI GANDA DULU =====
-        log('✅ ✅ ✅ MATCH FOUND! Score: ${bestScore.toStringAsFixed(4)} < $strictThreshold for NISN: ${bestUser.nisn}', name: 'FaceMatch');
+        log('✅ ✅ ✅ MATCH FOUND! Score: ${bestScore.toStringAsFixed(4)} < $FACE_THRESHOLD for NISN: ${bestUser.nisn}', name: 'FaceMatch');
         
         // CEK PRESENSI GANDA SEBELUM LANJUT KE KONFIRMASI
         if (bestUser.nisn != null && bestUser.nisn!.trim().isNotEmpty) {
@@ -1130,7 +1134,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         log('⚠️ No valid comparisons (data wajah terdaftar kurang lengkap), tetap lanjutkan failure flow', name: 'FaceMatch');
       }
 
-        // Tambah syarat: tunda notif gagal sampai minimal ada jeda awal, tapi tidak menunggu fail ke-2
+        // Tambah syarat: tunda notif gagal sampai minimal ada jeda awal
         final elapsedMs = DateTime.now().difference(_sessionStartTime).inMilliseconds;
         if (elapsedMs < _minFailDelayMs) {
           log('⏳ Delay failure notification (elapsed=${elapsedMs}ms)', name: 'FaceMatch');
@@ -1145,7 +1149,7 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
         }
         
         if (bestUser != null) {
-          log('✗ Face similarity too low: ${bestScore.toStringAsFixed(4)} >= $strictThreshold (Best match: NISN ${bestUser.nisn})', name: 'FaceMatch');
+          log('✗ Face similarity too low: ${bestScore.toStringAsFixed(4)} >= $FACE_THRESHOLD (Best match: NISN ${bestUser.nisn})', name: 'FaceMatch');
         } else {
           log('✗ No matching face found. No valid users to compare.', name: 'FaceMatch');
         }
@@ -1171,24 +1175,27 @@ class _AuthenticateScreenState extends State<AuthenticateScreen>
 
         // Set confidence/accuracy untuk UI meski gagal
         final failureConfidence = bestScore.isFinite
-            ? TrackingHelper.convertGeometricScoreToConfidence(bestScore)
+            ? _calculateAccuracy(bestScore)
             : 0.0;
         setState(() {
           _currentConfidenceScore = failureConfidence;
         });
         
-        // Smoothing: jika ada kandidat (bestUser != null), butuh 2 kegagalan berturut-turut sebelum dialog
-        final bool hasCandidate = bestUser != null;
-        if (hasCandidate && _failStreak < 1) {
-          _failStreak += 1;
-          log('⏳ Delay failure for registered-face candidate (failStreak=$_failStreak)', name: 'FaceMatch');
-          setState(() {
-            isMatching = false;
-            _isAutoProcessing = false;
-            _lastDetectedTrackingId = null;
-            _stableFrameCount = 0;
-          });
-          return;
+        // Jika wajah tidak terdaftar ATAU akurasi di bawah MIN_ACCURACY, langsung gagal (tanpa fail-streak)
+        final bool forceFail = (bestUser == null) || (failureConfidence < MIN_ACCURACY);
+        if (!forceFail) {
+          // Kandidat terdaftar dengan akurasi cukup: izinkan satu kali fail-streak smoothing
+          if (_failStreak < 1) {
+            _failStreak += 1;
+            log('⏳ Delay failure for registered-face candidate (failStreak=$_failStreak)', name: 'FaceMatch');
+            setState(() {
+              isMatching = false;
+              _isAutoProcessing = false;
+              _lastDetectedTrackingId = null;
+              _stableFrameCount = 0;
+            });
+            return;
+          }
         }
         // Reset fail streak setelah akan menampilkan dialog
         _failStreak = 0;
