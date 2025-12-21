@@ -164,6 +164,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           });
                         },
                         onInputImage: (inputImage) async {
+                          // Tampilkan loading dialog
+                          if (!mounted) return;
                           showDialog(
                             context: context,
                             barrierDismissible: false,
@@ -174,13 +176,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             ),
                           );
-                          await extractFaceFeatures(inputImage, _faceDetector)
-                              .then((faceFeatures) {
-                            setState(() {
-                              _faceFeatures = faceFeatures;
-                            });
-                            Navigator.of(context).pop();
-                          });
+                          
+                          try {
+                            // Ekstraksi fitur wajah dengan error handling
+                            final faceFeatures = await extractFaceFeatures(inputImage, _faceDetector);
+                            
+                            // Pastikan dialog di-close sebelum setState
+                            if (mounted) {
+                              Navigator.of(context).pop();
+                            }
+                            
+                            if (faceFeatures == null) {
+                              if (mounted) {
+                                showToast('Tidak ada wajah terdeteksi. Silakan coba lagi!');
+                              }
+                              return;
+                            }
+                            
+                            // Set state setelah dialog di-close
+                            if (mounted) {
+                              setState(() {
+                                _faceFeatures = faceFeatures;
+                              });
+                            }
+                          } catch (e) {
+                            log('❌ Error extracting face features: $e');
+                            // Pastikan dialog di-close meskipun error
+                            if (mounted) {
+                              Navigator.of(context).pop();
+                              showToast('Gagal mengekstrak fitur wajah: ${e.toString()}');
+                            }
+                          }
                         },
                       ),
                     ),
@@ -392,6 +418,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     final String nisn = _nisnController.text.trim();
 
+    if (!mounted) return;
     setState(() {
       isRegistering = true;
     });
@@ -400,14 +427,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
       // Validate student exists
       Map<String, dynamic>? studentData = await _validateStudent(nisn);
       if (studentData == null) {
-        showToast('NISN tidak ditemukan dalam database siswa');
+        if (mounted) {
+          showToast('NISN tidak ditemukan dalam database siswa');
+          setState(() {
+            isRegistering = false;
+          });
+        }
         return;
       }
 
       // Check if face already registered for this NISN
       bool faceExists = await _checkExistingFaceRegistration(nisn);
       if (faceExists) {
-        showToast('Wajah sudah terdaftar untuk NISN ini');
+        if (mounted) {
+          showToast('Wajah sudah terdaftar untuk NISN ini');
+          setState(() {
+            isRegistering = false;
+          });
+        }
         return;
       }
 
@@ -433,20 +470,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       log('Saving face data without name field: $faceData');
 
+      // Simpan dengan timeout untuk mencegah hang
       await FirebaseFirestore.instance
           .collection("wajah_siswa")
           .doc(faceId)
-          .set(faceData);
+          .set(faceData)
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              throw Exception('Timeout saat menyimpan data wajah');
+            },
+          );
 
-      showToast('Wajah berhasil didaftarkan!');
-
-      // Delay and navigate back
-      await Future.delayed(const Duration(seconds: 1));
       if (mounted) {
-        Navigator.of(context).pop();
+        showToast('Wajah berhasil didaftarkan!');
+
+        // Delay dan navigate back
+        await Future.delayed(const Duration(seconds: 1));
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
       }
     } catch (e) {
-      showToast('Terjadi kesalahan: ${e.toString()}');
+      log('❌ Error in _registerFace: $e');
+      if (mounted) {
+        showToast('Terjadi kesalahan: ${e.toString()}');
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -469,7 +518,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    _faceDetector.close();
+    // Pastikan FaceDetector di-close dengan benar untuk mencegah memory leak
+    try {
+      _faceDetector.close();
+    } catch (e) {
+      log('Error closing face detector: $e');
+    }
     _nisnController.dispose();
     super.dispose();
   }

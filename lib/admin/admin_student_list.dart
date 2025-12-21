@@ -805,7 +805,12 @@ class _AdminStudentListState extends State<AdminStudentList> {
     final namaController = TextEditingController(text: student['nama_siswa']);
     final emailOrangtuaController = TextEditingController(text: student['email_orangtua'] ?? '');
     final telpOrangtuaController = TextEditingController(text: student['telp_orangtua'] ?? '');
-    String? selectedClass = student['kelas_sw'];
+    // Normalize class to lowercase to match dropdown values
+    String? selectedClass = student['kelas_sw']?.toString().toLowerCase();
+    // Validate that selectedClass exists in classOptions, otherwise set to null
+    if (selectedClass != null && !classOptions.any((kelas) => kelas.toLowerCase() == selectedClass)) {
+      selectedClass = null;
+    }
     // Normalize gender to uppercase to match dropdown values
     String? selectedGender = student['jenis_kelamin']?.toString().toUpperCase();
     // Check if NIP exists in walikelas list

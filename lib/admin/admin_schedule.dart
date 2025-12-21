@@ -189,7 +189,9 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
 
           String hari = scheduleData['hari'] ?? '';
           String mataPelajaran = scheduleData['mata_pelajaran'] ?? '';
-          String kelas = scheduleData['kelas'] ?? '';
+          // Normalize class value: trim and convert to uppercase to match `classOptions`
+          // (e.g. ' 3a' -> '3A'). This prevents DropdownButton value mismatches.
+          String kelas = (scheduleData['kelas'] ?? '').toString().trim().toUpperCase();
 
           log('Extracted values:');
           log('- hari: $hari');
@@ -260,7 +262,9 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
       Map<String, String> tempTeachers = {};
       for (var doc in teachersSnapshot.docs) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        String kelas = data['kelas']?.toString().toLowerCase() ?? '';
+  // Store keys in uppercase (and trimmed) so lookups with `selectedKelas`
+  // (which uses uppercase) succeed consistently.
+  String kelas = data['kelas']?.toString().trim().toUpperCase() ?? '';
         String nip = data['nip']?.toString() ?? '';
         if (kelas.isNotEmpty && nip.isNotEmpty) {
           tempTeachers[kelas] = nip;
@@ -355,8 +359,10 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
   }
 
   Future<void> _showAddEditScheduleDialog({ScheduleModel? schedule}) async {
-    String selectedHari = schedule?.hari ?? 'senin';
-    String selectedKelas = schedule?.kelas ?? '1A';
+    // Normalize incoming schedule values so the Dropdown's `value` matches
+    // exactly one of the DropdownMenuItem `value`s.
+    String selectedHari = (schedule?.hari ?? 'senin').toString().trim().toLowerCase();
+    String selectedKelas = (schedule?.kelas ?? '1A').toString().trim().toUpperCase();
     TimeOfDay selectedJamMulai =
         schedule?.jamMulai ?? const TimeOfDay(hour: 8, minute: 0);
     TimeOfDay selectedJamSelesai =
@@ -948,7 +954,9 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
-                            value: selectedClassFilter,
+                            // Normalize the currently selected filter value to uppercase
+                            // so it matches the `classOptions` items.
+                            value: selectedClassFilter?.toString().trim().toUpperCase(),
                             hint: const Text('Kelas'),
                             isExpanded: true,
                             icon: const Icon(Icons.class_,

@@ -365,6 +365,7 @@ class _CameraViewState extends State<CameraView> with TickerProviderStateMixin {
   }
 
   Future _getImage() async {
+    if (!mounted) return;
     setState(() {
       _image = null;
       _isProcessing = true;
@@ -383,15 +384,24 @@ class _CameraViewState extends State<CameraView> with TickerProviderStateMixin {
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
+      // Reset state jika error
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     } finally {
-      setState(() {
-        _isProcessing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
   Future _setPickedFile(XFile? pickedFile) async {
     if (pickedFile == null) return;
+    if (!mounted) return;
 
     try {
       if (kIsWeb) {
@@ -412,18 +422,47 @@ class _CameraViewState extends State<CameraView> with TickerProviderStateMixin {
       } else {
         // Handle mobile platforms
         final path = pickedFile.path;
+        if (!mounted) return;
         setState(() {
           _image = File(path);
         });
 
-        Uint8List imageBytes = _image!.readAsBytesSync();
+        // Baca image bytes dengan error handling
+        Uint8List imageBytes;
+        try {
+          imageBytes = _image!.readAsBytesSync();
+        } catch (e) {
+          debugPrint('Error reading image bytes: $e');
+          if (mounted) {
+            setState(() {
+              _isProcessing = false;
+            });
+          }
+          return;
+        }
+
         widget.onImage(imageBytes);
 
-        InputImage inputImage = InputImage.fromFilePath(path);
-        widget.onInputImage(inputImage);
+        // Buat InputImage dengan error handling
+        try {
+          InputImage inputImage = InputImage.fromFilePath(path);
+          widget.onInputImage(inputImage);
+        } catch (e) {
+          debugPrint('Error creating InputImage: $e');
+          if (mounted) {
+            setState(() {
+              _isProcessing = false;
+            });
+          }
+        }
       }
     } catch (e) {
       debugPrint('Error processing image: $e');
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 }
